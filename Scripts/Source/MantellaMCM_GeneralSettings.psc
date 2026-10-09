@@ -20,6 +20,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_keymapEndHotkey = mcm.AddKeyMapOption("End Conversation / Remove NPC", repository.MantellaEndHotkey)
     mcm.oid_keymapCustomGameEventHotkey = mcm.AddKeyMapOption("Add Custom Game Event", repository.MantellaCustomGameEventHotkey)
     mcm.oid_keymapRadiantHotkey = mcm.AddKeyMapOption("Toggle Radiant Dialogue", repository.MantellaRadiantHotkey) 
+    mcm.oid_keymapInterruptHotkey = mcm.AddKeyMapOption("Interrupt NPCs", repository.MantellaInterruptHotkey)
 endfunction
 
 function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
@@ -76,7 +77,7 @@ endfunction
 
 function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictControl, String conflictName, MantellaRepository Repository) global
     ;This script is used to check if a key is already used, if it's not it will update to a new value (stored in MantellaRepository) or it will prompt the user to warn him of the conflict. The actual keybind happens in MantellaRepository
-    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapRadiantHotkey
+    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapRadiantHotkey || option == mcm.oid_keymapInterruptHotkey
     if (isOptionHotkey)
         Bool continue = true
         ;below checks if there's already a bound key
@@ -102,6 +103,8 @@ function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictCo
                 repository.BindCustomGameEventHotkey(keyCode)
             elseIf option == mcm.oid_keymapRadiantHotkey
                 repository.BindRadiantHotkey(keyCode)
+            elseIf option == mcm.oid_keymapInterruptHotkey
+                repository.BindInterruptHotkey(keyCode)
             endif
         endIf
     endIf

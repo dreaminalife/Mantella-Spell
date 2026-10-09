@@ -154,7 +154,7 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
     ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to trace a message", 2)
     string replyType = SKSE_HTTP.getString(typedDictionaryHandle, mConsts.KEY_REPLYTYPE ,"error")
     ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to determine reply type", 2)
-    IF replyType == mConsts.KEY_REPLYTTYPE_INITCOMPLETED
+    IF replyType == mConsts.KEY_REPLYTTYPE_INITCOMPLETED || replyType == mConsts.KEY_REPLYTYPE_INTERRUPTRECEIVED
         None
     ElseIf (replyType != "error")
         ContinueConversation(replyType, typedDictionaryHandle)        
@@ -424,6 +424,19 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
 
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
     EndIf
+endFunction
+
+function RequestInterrupt()
+    ; Nothing to interrupt during the player's turn or without the player (radiant conversations)
+    if(_hasBeenStopped || _does_accept_player_input || !IsPlayerInConversation())
+        return
+    endif
+
+    ; Sent while the continue request is still running. MantellaSoftware stops the NPCs and that request gives the player the turn
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_INTERRUPT)
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+    Debug.Notification("Interrupting...")
 endFunction
 
 function sendRequestForVoiceTranscribe()

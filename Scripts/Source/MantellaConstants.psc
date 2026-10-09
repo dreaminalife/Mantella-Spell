@@ -32,6 +32,7 @@ string property KEY_REQUESTTYPE_STARTCONVERSATION = "mantella_start_conversation
 string property KEY_REQUESTTYPE_CONTINUECONVERSATION = "mantella_continue_conversation" auto
 string property KEY_REQUESTTYPE_PLAYERINPUT = "mantella_player_input" auto
 string property KEY_REQUESTTYPE_ENDCONVERSATION = "mantella_end_conversation" auto
+string property KEY_REQUESTTYPE_INTERRUPT = "mantella_interrupt" auto
 
 string property KEY_REPLYTTYPE_INITCOMPLETED = "mantella_init_completed" auto
 string property KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED = "mantella_start_conversation_completed" auto
@@ -40,6 +41,7 @@ string property KEY_REPLYTYPE_NPCTALK = "mantella_npc_talk" auto
 string property KEY_REPLYTYPE_PLAYERTALK = "mantella_player_talk" auto
 string property KEY_REPLYTYPE_NPCACTION = "mantella_npc_action" auto
 string property KEY_REPLYTYPE_ENDCONVERSATION = "mantella_end_conversation" auto
+string property KEY_REPLYTYPE_INTERRUPTRECEIVED = "mantella_interrupt_received" auto
 
 string property KEY_STARTCONVERSATION_WORLDID = "mantella_worldid" auto
 string property KEY_STARTCONVERSATION_USENARRATOR = "mantella_use_narrator" auto

@@ -13,6 +13,7 @@ int property oid_keymapPromptHotkey auto
 int property oid_keymapEndHotkey auto
 int property oid_keymapCustomGameEventHotkey auto
 int property oid_keymapRadiantHotkey auto
+int property oid_keymapInterruptHotkey auto
 
 int property oid_showDialogueItems auto
 
@@ -111,7 +112,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 6
+    Return 8
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -237,6 +238,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Opens a text prompt to enter a custom game event (eg 'The house is on fire').")
 	elseIf optionID == oid_keymapRadiantHotkey	
 		SetInfoText("Toggle radiant conversations.")
+	elseIf optionID == oid_keymapInterruptHotkey
+		SetInfoText("Stops the NPCs mid-response and gives you the turn. Then reply with the Open Text Prompt hotkey or the mic.")
 
     elseIf optionID == oid_showDialogueItems	
 		SetInfoText("Show the dialogue tree entries to start a conversation or add and remove NPCs from it.")

@@ -28,6 +28,7 @@ int property MantellaListenerTextHotkey auto
 int property MantellaEndHotkey auto
 int property MantellaCustomGameEventHotkey auto
 int property MantellaRadiantHotkey auto
+int property MantellaInterruptHotkey auto
 
 bool property showDialogueItems auto Conditional
 
@@ -121,6 +122,9 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 8 || isFirstInit)
+        MantellaInterruptHotkey = -1
+    EndIf
     If (lastVersion < 6 || isFirstInit)
         NPCInventory = false
     EndIf
@@ -254,6 +258,13 @@ function BindRadiantHotkey(int keyCode)
     RegisterForKey(keyCode)
 endfunction
 
+function BindInterruptHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings when updating the interrupt hotkey KeyMapChange
+    UnregisterForKey(MantellaInterruptHotkey)
+    MantellaInterruptHotkey=keyCode
+    RegisterForKey(keyCode)
+endfunction
+
 bool Function IsVR()
     return Debug.GetVersionNumber() == "1.4.15.0"
 EndFunction
@@ -306,6 +317,11 @@ Event OnKeyDown(int KeyCode)
                     gameEventEntry = gameEventEntry+"\n"
                     conversation.AddIngameEvent(gameEventEntry)
                 endIf
+            endIf
+        elseIf KeyCode == MantellaInterruptHotkey
+            MantellaConversation conversation = Quest.GetQuest("MantellaConversation") as MantellaConversation
+            if(conversation.IsRunning())
+                conversation.RequestInterrupt()
             endIf
         elseIf KeyCode == MantellaRadiantHotkey
             radiantEnabled =! radiantEnabled

@@ -109,6 +109,9 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     int eventHandle = ModEvent.Create(EventInterface.EVENT_CONVERSATION_STARTED)
     if (eventHandle)        
         ModEvent.Send(eventHandle)
+    endIf
+    if (repository.IsVanillaDialogueInstalled())
+        MantellaVanillaDialogue.notifyConversationStart()
     endIf 
 endFunction
 
@@ -388,6 +391,9 @@ Function CleanupConversation()
     if (handle)        
         ModEvent.Send(handle)
     endIf 
+    if (repository.IsVanillaDialogueInstalled())
+        MantellaVanillaDialogue.notifyConversationEnd()
+    endIf
     Debug.Notification("Conversation ended.")  
     Stop()
 EndFunction
@@ -589,6 +595,9 @@ Function SendActorAddedEvents(Form[] actorsAdded)
         EndIf
         index += 1
     EndWhile
+    if (repository.IsVanillaDialogueInstalled())
+        MantellaVanillaDialogue.notifyNpcAdded(actorsAdded)
+    endIf
 EndFunction
 
 Function SendActorRemovedEvents(Form[] actorsRemoved)
@@ -602,6 +611,9 @@ Function SendActorRemovedEvents(Form[] actorsRemoved)
         endIf 
         index += 1
     EndWhile
+    if (repository.IsVanillaDialogueInstalled())
+        MantellaVanillaDialogue.notifyNpcRemoved(actorsRemoved)
+    endIf
 EndFunction
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -90,7 +90,7 @@ bool property targetEquipmentAmulet auto
 bool property targetEquipmentRightHand auto
 bool property targetEquipmentLeftHand auto
 
-
+bool property enableVanillaDialogueAwareness auto ; read by the Mantella Vanilla Dialogue SKSE plugin
 bool property AllowForNPCtoFollow auto ;gia
 ;bool property followingNPCsit auto ;gia
 ;bool property followingNPCsleep auto ;gia
@@ -122,6 +122,10 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    ; 7 is the Mantella Vanilla Dialogue mod's version, which already set this. 8 is this add-on's previous release, which didn't
+    If (lastVersion < 7 || lastVersion == 8 || isFirstInit)
+        enableVanillaDialogueAwareness = true
+    EndIf
     If (lastVersion < 8 || isFirstInit)
         MantellaInterruptHotkey = -1
     EndIf
@@ -267,6 +271,11 @@ endfunction
 
 bool Function IsVR()
     return Debug.GetVersionNumber() == "1.4.15.0"
+EndFunction
+
+; True when the Mantella Vanilla Dialogue SKSE plugin (MantellaDialogue.dll) is loaded
+bool Function IsVanillaDialogueInstalled()
+    return SKSE.GetPluginVersion("MantellaDialogue") >= 0
 EndFunction
 
 bool function restartMantellaExe()

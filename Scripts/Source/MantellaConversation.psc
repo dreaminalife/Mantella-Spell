@@ -39,6 +39,7 @@ int _lastTopicInfo = 0
 float httpReceivedTime = 0.0
 string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
+bool _npcInitiative = false
 
 event OnInit()
     RegisterForConversationEvents()
@@ -68,7 +69,15 @@ endEvent
 ;    Start new conversation   ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+; The next conversation is started by the NPC walking up to the player (NPC Initiative)
+Function SetNpcInitiative()
+    _npcInitiative = true
+EndFunction
+
 function StartConversation(Actor[] actorsToStartConversationWith)
+    ; Cleared right away, so an early return can't leave it set for the next conversation
+    bool isNpcInitiative = _npcInitiative
+    _npcInitiative = false
     if(actorsToStartConversationWith.Length > 2)
         Debug.Notification("Cannot start conversation. Conversation is already running.")
         return
@@ -89,6 +98,9 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_STARTCONVERSATION)
     SKSE_HTTP.setString(handle, mConsts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
+    if (isNpcInitiative)
+        SKSE_HTTP.setBool(handle, mConsts.KEY_STARTCONVERSATION_NPCINITIATIVE, true)
+    endIf
     BuildContext(true)
     AddCurrentActorsAndContext(handle, true)
 
@@ -162,6 +174,9 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
     ElseIf (replyType != "error")
         ContinueConversation(replyType, typedDictionaryHandle)        
     Else
+        If (!IsRunning())
+            return ; Not about a conversation, e.g. a failed NPC Initiative check
+        EndIf
         string errorMessage = SKSE_HTTP.getString(typedDictionaryHandle, "mantella_message","Error: Received an error reply from MantellaSoftware but there was no error message attached.")
         Debug.Notification(errorMessage)
         CleanupConversation()
@@ -653,6 +668,9 @@ endEvent
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 event OnHttpErrorReceived(int typedDictionaryHandle)
+    If (!IsRunning())
+        return ; Not about a conversation, e.g. a failed NPC Initiative check
+    EndIf
     string errorMessage = SKSE_HTTP.getString(typedDictionaryHandle, mConsts.HTTP_ERROR ,"error")
     If (errorMessage != "error")
         Debug.Notification("Received SKSE_HTTP error: " + errorMessage)        

@@ -61,11 +61,28 @@ Event OnPlayerLoadGame()
     ;     MantellaMCMQuest.OnConfigInit()
     ;     repository.assignDefaultSettings(0,true)
     ; EndIf
+    RegisterForModEvent("SKSE_HTTP_OnHttpReplyReceived", "OnHttpReplyReceived")
+    RegisterForModEvent("Mantella_NpcInitiativeHotkey", "OnNpcInitiativeHotkey")
+    RegisterForMenu("Loading Menu")
+    _lastCell = PlayerRef.GetParentCell()
+    ; Real time starts from 0 on every game launch, so times kept in the save would be in the future
+    _initiativePending = false
+    _isCheckingInitiative = false ; In case the save was made during a check
+    _lastInitiativeCheckTime = Utility.GetCurrentRealTime()
+    _lastPlayerConversationTime = _lastInitiativeCheckTime
+    _initiativeSentTime = _lastInitiativeCheckTime
     RegisterForSingleUpdate(repository.radiantFrequency)
 EndEvent
 
 event OnUpdate()
-    if repository.radiantEnabled
+    bool hasSentInitiativeCheck = false
+    if conversation.IsRunning() && conversation.IsPlayerInConversation()
+        _lastPlayerConversationTime = Utility.GetCurrentRealTime()
+    elseIf repository.npcInitiativeEnabled && repository.npcInitiativeIdleMinutes > 0 && Utility.GetCurrentRealTime() - _lastPlayerConversationTime >= repository.npcInitiativeIdleMinutes * 60
+        hasSentInitiativeCheck = TryNpcInitiative()
+    endIf
+    ; No radiant attempt in the same tick, so a radiant conversation and the NPC Initiative check don't start together
+    if repository.radiantEnabled && !hasSentInitiativeCheck
         ; if no Mantella conversation active
         if !conversation.IsRunning()
             ;MantellaActorList taken from this tutorial:
@@ -206,7 +223,31 @@ Event OnLocationChange(Location akOldLoc, Location akNewLoc)
         endIf
         AddIngameEventToConversation("The location is now " + _location)
     endIf
+    if repository.npcInitiativeEnabled && repository.npcInitiativeOnLocationChange && !conversation.IsRunning()
+        Utility.Wait(repository.npcInitiativeSettleDelay) ; Lets the NPCs of the new location load
+        TryNpcInitiative()
+    endIf
 endEvent
+
+
+; Rooms behind a load door are often separate cells of the same location, so OnLocationChange doesn't fire when entering them.
+; A loading screen that ends in a new cell counts as a location change for NPC Initiative.
+; When OnLocationChange also fires, the first check to run makes the other wait for the min time between checks
+Cell _lastCell
+Event OnMenuClose(String menuName)
+    if menuName != "Loading Menu"
+        return
+    endIf
+    Cell newCell = PlayerRef.GetParentCell()
+    if newCell == _lastCell
+        return
+    endIf
+    _lastCell = newCell
+    if repository.npcInitiativeEnabled && repository.npcInitiativeOnLocationChange && !conversation.IsRunning()
+        Utility.Wait(repository.npcInitiativeSettleDelay) ; Lets the NPCs of the new cell load
+        TryNpcInitiative()
+    endIf
+EndEvent
 
 
 Event OnObjectEquipped(Form akBaseObject, ObjectReference akReference)
@@ -264,4 +305,253 @@ Event OnDying(Actor akKiller)
         conversation.EndConversation()
     EndIf
 EndEvent
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;        NPC Initiative       ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; A nearby NPC who has a reason to talk to the player walks up and starts a conversation.
+; Mantella's server decides who (if anyone) that is.
+
+float _lastInitiativeCheckTime = 0.0
+float _lastPlayerConversationTime = 0.0
+float _initiativeSentTime = 0.0
+bool _initiativePending = false
+Actor[] _initiativeCandidates
+int _initiativeCandidateCount = 0
+float initiativePendingTimeout = 30.0 ; Seconds. An error reply can't be told apart from other requests' errors, so a lost reply times out
+bool _isCheckingInitiative = false
+
+; The hotkey checks right away, even when NPC Initiative is off or a check ran recently
+Event OnNpcInitiativeHotkey(string eventName, string strArg, float numArg, Form sender)
+    if TryNpcInitiative(true)
+        if !repository.showNpcInitiativeMessages ; Otherwise the check already named the NPCs it considers
+            Debug.Notification("NPC Initiative: checking nearby NPCs")
+        endIf
+    else
+        Debug.Notification("NPC Initiative: can't check right now")
+    endIf
+EndEvent
+
+; Returns true if a check was sent to the server
+bool Function TryNpcInitiative(bool isManual = false)
+    ; Calls into other scripts let other events run, so a location change and the idle timer could otherwise check at the same time.
+    ; Nothing may call another script between this test and the set
+    if _isCheckingInitiative
+        return false
+    endIf
+    _isCheckingInitiative = true
+    bool hasSent = RunNpcInitiativeCheck(isManual)
+    _isCheckingInitiative = false
+    return hasSent
+EndFunction
+
+bool Function RunNpcInitiativeCheck(bool isManual)
+    if (!repository.npcInitiativeEnabled && !isManual) || conversation.IsRunning()
+        return false
+    endIf
+    float now = Utility.GetCurrentRealTime()
+    if _initiativePending && now - _initiativeSentTime < initiativePendingTimeout
+        return false
+    endIf
+    if (!isManual && now - _lastInitiativeCheckTime < repository.npcInitiativeMinInterval) || !CanPlayerBeApproached()
+        return false
+    endIf
+    _lastInitiativeCheckTime = now
+
+    FindInitiativeCandidates()
+    if _initiativeCandidateCount == 0
+        if repository.showNpcInitiativeMessages
+            Debug.Notification("NPC Initiative: no NPCs nearby")
+        endIf
+        return false
+    endIf
+
+    MantellaConstants consts = conversation.mConsts
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, consts.KEY_REQUESTTYPE, consts.KEY_REQUESTTYPE_NPCINITIATIVE)
+    SKSE_HTTP.setString(handle, consts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
+    if isManual && repository.npcInitiativeHotkeySkipsThreshold
+        SKSE_HTTP.setBool(handle, consts.KEY_NPCINITIATIVE_SKIPTHRESHOLD, true)
+    endIf
+
+    int[] actorHandles = Utility.CreateIntArray(_initiativeCandidateCount + 1)
+    actorHandles[0] = conversation.buildActorSetting(PlayerRef)
+    string candidateNames = ""
+    int i = 0
+    while i < _initiativeCandidateCount
+        actorHandles[i + 1] = conversation.buildActorSetting(_initiativeCandidates[i])
+        candidateNames += _initiativeCandidates[i].GetDisplayName() + " "
+        i += 1
+    endWhile
+    SKSE_HTTP.setNestedDictionariesArray(handle, consts.KEY_ACTORS, actorHandles)
+
+    int contextHandle = SKSE_HTTP.createDictionary()
+    string locationName = "Skyrim"
+    Location currentLocation = PlayerRef.GetCurrentLocation()
+    if currentLocation && currentLocation.GetName() != ""
+        locationName = currentLocation.GetName()
+    endIf
+    SKSE_HTTP.setString(contextHandle, consts.KEY_CONTEXT_LOCATION, locationName)
+    SKSE_HTTP.setInt(contextHandle, consts.KEY_CONTEXT_TIME, conversation.GetCurrentHourOfDay())
+    SKSE_HTTP.setNestedDictionary(handle, consts.KEY_CONTEXT, contextHandle)
+
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
+    _initiativePending = true
+    _initiativeSentTime = now
+    _lastPlayerConversationTime = now ; A sent check counts as the idle check, so the next one comes after the idle minutes again
+    if repository.showNpcInitiativeMessages
+        Debug.Notification("NPC Initiative check: " + candidateNames)
+    endIf
+    return true
+EndFunction
+
+bool Function CanPlayerBeApproached()
+    return !conversation.IsRunning() && !PlayerRef.IsInCombat() && !PlayerRef.IsSneaking() && !Utility.IsInMenuMode() && !UI.IsMenuOpen("Dialogue Menu")
+EndFunction
+
+bool Function IsInitiativeCandidate(Actor npc)
+    if !npc || npc == PlayerRef || npc.IsDisabled() || npc.IsDead() || npc.IsUnconscious() || npc.IsBleedingOut()
+        return false
+    endIf
+    if npc.IsHostileToActor(PlayerRef) || npc.IsInCombat()
+        return false
+    endIf
+    if !repository.npcInitiativeIncludeFollowers && IsActiveFollower(npc)
+        return false
+    endIf
+    if npc.GetSleepState() == 3 || npc.IsInDialogueWithPlayer() ; 3 is asleep
+        return false
+    endIf
+    ; Either one seeing the other counts: the NPC's side lets NPCs behind the player count, the player's side lets
+    ; NPCs who can't turn toward the player count, like those sitting facing away
+    return repository.npcInitiativeIgnoreLineOfSight || npc.HasLOS(PlayerRef) || PlayerRef.HasLOS(npc)
+EndFunction
+
+; Following the player right now: a vanilla-style follower who is not told to wait, or one recruited with Mantella's follow action.
+; Waiting, dismissed and potential followers are not active followers
+bool Function IsActiveFollower(Actor npc)
+    if npc.IsPlayerTeammate() && npc.GetActorValue("WaitingForPlayer") == 0
+        return true
+    endIf
+    return npc.GetFactionRank(repository.giafac_Following) >= 1 ; Mantella's follow action sets rank 1, ending it sets -2
+EndFunction
+
+; Keeps the nearest candidates in _initiativeCandidates: the nearest active followers, up to their own cap so a big
+; group of followers can't crowd out everyone else, then the nearest other NPCs for the places left
+Function FindInitiativeCandidates()
+    int maxCount = ClampInt(repository.npcInitiativeMaxCandidates, 1, 10)
+    int maxFollowers = 0
+    if repository.npcInitiativeIncludeFollowers
+        maxFollowers = ClampInt(repository.npcInitiativeMaxFollowers, 0, maxCount)
+    endIf
+    Actor[] followers = new Actor[10]
+    float[] followerDistances = new float[10]
+    int followerCount = 0
+    Actor[] others = new Actor[10]
+    float[] otherDistances = new float[10]
+    int otherCount = 0
+
+    ; ScanCellNPCs' own keyword filter misses keywords that come from the race, like ActorTypeNPC, so it is checked here
+    Keyword actorTypeNPC = Keyword.GetKeyword("ActorTypeNPC")
+    Actor[] found = MiscUtil.ScanCellNPCs(PlayerRef, ConvertMeterToGameUnits(repository.npcInitiativeMaxDistance))
+    Actor npc
+    int i = 0
+    while i < found.Length
+        npc = found[i]
+        if npc.HasKeyword(actorTypeNPC) && IsInitiativeCandidate(npc)
+            if IsActiveFollower(npc)
+                followerCount = InsertByDistance(followers, followerDistances, followerCount, maxFollowers, npc, PlayerRef.GetDistance(npc))
+            else
+                otherCount = InsertByDistance(others, otherDistances, otherCount, maxCount, npc, PlayerRef.GetDistance(npc))
+            endIf
+        endIf
+        i += 1
+    endWhile
+
+    _initiativeCandidates = new Actor[10]
+    _initiativeCandidateCount = 0
+    i = 0
+    while i < followerCount
+        _initiativeCandidates[_initiativeCandidateCount] = followers[i]
+        _initiativeCandidateCount += 1
+        i += 1
+    endWhile
+    i = 0
+    while i < otherCount && _initiativeCandidateCount < maxCount
+        _initiativeCandidates[_initiativeCandidateCount] = others[i]
+        _initiativeCandidateCount += 1
+        i += 1
+    endWhile
+EndFunction
+
+; Inserts npc into a list sorted by distance that holds at most maxCount NPCs, dropping the farthest when it is full.
+; Returns the new number of NPCs in the list
+int Function InsertByDistance(Actor[] npcs, float[] distances, int count, int maxCount, Actor npc, float distance)
+    if maxCount < 1 || (count >= maxCount && distance >= distances[count - 1])
+        return count
+    endIf
+    int slot = count
+    if count < maxCount
+        count += 1
+    else
+        slot = count - 1
+    endIf
+    while slot > 0 && distances[slot - 1] > distance
+        npcs[slot] = npcs[slot - 1]
+        distances[slot] = distances[slot - 1]
+        slot -= 1
+    endWhile
+    npcs[slot] = npc
+    distances[slot] = distance
+    return count
+EndFunction
+
+int Function ClampInt(int value, int min, int max)
+    if value < min
+        return min
+    elseIf value > max
+        return max
+    endIf
+    return value
+EndFunction
+
+event OnHttpReplyReceived(int typedDictionaryHandle)
+    MantellaConstants consts = conversation.mConsts
+    if SKSE_HTTP.getString(typedDictionaryHandle, consts.KEY_REPLYTYPE, "") != consts.KEY_REPLYTYPE_NPCINITIATIVE
+        return
+    endIf
+    _initiativePending = false
+    int chosenRefId = SKSE_HTTP.getInt(typedDictionaryHandle, consts.KEY_NPCINITIATIVE_CHOSEN_REFID, 0)
+    Actor chosen = None
+    int i = 0
+    while i < _initiativeCandidateCount && chosenRefId != 0
+        if (_initiativeCandidates[i] as Form).GetFormID() == chosenRefId
+            chosen = _initiativeCandidates[i]
+        endIf
+        i += 1
+    endWhile
+    if !chosen
+        if repository.showNpcInitiativeMessages
+            Debug.Notification("NPC Initiative: nobody")
+        endIf
+        return
+    endIf
+    ; The situation may have changed while the server decided
+    if !CanPlayerBeApproached() || !IsInitiativeCandidate(chosen)
+        if repository.showNpcInitiativeMessages
+            Debug.Notification("NPC Initiative: " + chosen.GetDisplayName() + " can no longer approach")
+        endIf
+        return
+    endIf
+    if repository.showNpcInitiativeMessages
+        Debug.Notification("NPC Initiative: " + chosen.GetDisplayName() + " approaches")
+    endIf
+    Actor[] actors = new Actor[2]
+    actors[0] = PlayerRef
+    actors[1] = chosen
+    conversation.Start()
+    conversation.SetNpcInitiative()
+    conversation.StartConversation(actors)
+endEvent
 

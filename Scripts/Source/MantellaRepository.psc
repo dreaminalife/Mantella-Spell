@@ -29,6 +29,7 @@ int property MantellaEndHotkey auto
 int property MantellaCustomGameEventHotkey auto
 int property MantellaRadiantHotkey auto
 int property MantellaInterruptHotkey auto
+int property MantellaNpcInitiativeHotkey auto
 
 bool property showDialogueItems auto Conditional
 
@@ -36,6 +37,19 @@ bool property radiantEnabled auto
 float property radiantDistance auto
 float property radiantFrequency auto
 bool property showRadiantDialogueMessages auto
+
+bool property npcInitiativeEnabled auto
+bool property npcInitiativeOnLocationChange auto
+float property npcInitiativeIdleMinutes auto
+float property npcInitiativeMinInterval auto
+float property npcInitiativeSettleDelay auto
+float property npcInitiativeMaxDistance auto
+int property npcInitiativeMaxCandidates auto
+bool property npcInitiativeIncludeFollowers auto
+int property npcInitiativeMaxFollowers auto
+bool property npcInitiativeIgnoreLineOfSight auto
+bool property showNpcInitiativeMessages auto
+bool property npcInitiativeHotkeySkipsThreshold auto
 
 string property playerCharacterDescription1 auto
 string property playerCharacterDescription2 auto
@@ -122,6 +136,23 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 11 || isFirstInit)
+        MantellaNpcInitiativeHotkey = -1
+        npcInitiativeHotkeySkipsThreshold = false
+        npcInitiativeIgnoreLineOfSight = false
+    EndIf
+    If (lastVersion < 10 || isFirstInit)
+        npcInitiativeEnabled = false
+        npcInitiativeOnLocationChange = true
+        npcInitiativeIdleMinutes = 10
+        npcInitiativeMinInterval = 60
+        npcInitiativeSettleDelay = 3
+        npcInitiativeMaxDistance = 10
+        npcInitiativeMaxCandidates = 5
+        npcInitiativeIncludeFollowers = true
+        npcInitiativeMaxFollowers = 2
+        showNpcInitiativeMessages = false
+    EndIf
     ; 7 is the Mantella Vanilla Dialogue mod's version, which already set this. 8 is this add-on's previous release, which didn't
     If (lastVersion < 7 || lastVersion == 8 || isFirstInit)
         enableVanillaDialogueAwareness = true
@@ -269,6 +300,13 @@ function BindInterruptHotkey(int keyCode)
     RegisterForKey(keyCode)
 endfunction
 
+function BindNpcInitiativeHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings KeyMapChange (from the NPC Initiative page) when updating the NPC Initiative hotkey
+    UnregisterForKey(MantellaNpcInitiativeHotkey)
+    MantellaNpcInitiativeHotkey=keyCode
+    RegisterForKey(keyCode)
+endfunction
+
 bool Function IsVR()
     return Debug.GetVersionNumber() == "1.4.15.0"
 EndFunction
@@ -332,6 +370,8 @@ Event OnKeyDown(int KeyCode)
             if(conversation.IsRunning())
                 conversation.RequestInterrupt()
             endIf
+        elseIf KeyCode == MantellaNpcInitiativeHotkey
+            SendModEvent("Mantella_NpcInitiativeHotkey") ; The check lives in MantellaListenerScript
         elseIf KeyCode == MantellaRadiantHotkey
             radiantEnabled =! radiantEnabled
             if radiantEnabled == True

@@ -43,6 +43,12 @@ string property KEY_REPLYTYPE_NPCACTION = "mantella_npc_action" auto
 string property KEY_REPLYTYPE_ENDCONVERSATION = "mantella_end_conversation" auto
 string property KEY_REPLYTYPE_INTERRUPTRECEIVED = "mantella_interrupt_received" auto
 
+string property KEY_REQUESTTYPE_NPCINITIATIVE = "mantella_npc_initiative_check" auto
+string property KEY_REPLYTYPE_NPCINITIATIVE = "mantella_npc_initiative_result" auto
+string property KEY_STARTCONVERSATION_NPCINITIATIVE = "mantella_npc_initiative" auto
+string property KEY_NPCINITIATIVE_CHOSEN_REFID = "mantella_npc_initiative_chosen_refid" auto
+string property KEY_NPCINITIATIVE_SKIPTHRESHOLD = "mantella_npc_initiative_skip_threshold" auto
+
 string property KEY_STARTCONVERSATION_WORLDID = "mantella_worldid" auto
 string property KEY_STARTCONVERSATION_USENARRATOR = "mantella_use_narrator" auto
 string property KEY_CONTINUECONVERSATION_TOPICINFOFILE = "mantella_topicinfofile" auto

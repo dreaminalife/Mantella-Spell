@@ -21,7 +21,7 @@
         <Import>@GameFolder\Data\Scripts\Source</Import>
         <Import>@GameFolder\Data\Source\Scripts</Import>        
         <Import>@ModsFolder\SKSE64\Scripts\Source</Import>
-        <!-- <Import>@ModsFolder\PapyrusUtil AE SE - Scripting Utility Functions\Scripts\Source</Import> -->
+        <Import>@ModsFolder\PapyrusUtil SE - Modders Scripting Utility Functions\Scripts\Source</Import>
         <Import>@ModsFolder\SKSE_HTTP\Scripts\Source</Import>
         <Import>@ModsFolder\SkyUI_5.1_SDK\scripts\source</Import>
         <Import>@ModsFolder\UIExtensions\scripts\source</Import>

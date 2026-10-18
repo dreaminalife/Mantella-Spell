@@ -14,6 +14,7 @@ int property oid_keymapEndHotkey auto
 int property oid_keymapCustomGameEventHotkey auto
 int property oid_keymapRadiantHotkey auto
 int property oid_keymapInterruptHotkey auto
+int property oid_keymapNpcInitiativeHotkey auto
 
 int property oid_showDialogueItems auto
 
@@ -21,6 +22,19 @@ int property oid_radiantenabled auto
 int property oid_radiantdistance auto
 int property oid_radiantfrequency auto
 int property oid_showRadiantDialogueMessages auto
+
+int property oid_npcInitiativeEnabled auto
+int property oid_npcInitiativeOnLocationChange auto
+int property oid_npcInitiativeIdleMinutes auto
+int property oid_npcInitiativeMinInterval auto
+int property oid_npcInitiativeSettleDelay auto
+int property oid_npcInitiativeMaxDistance auto
+int property oid_npcInitiativeMaxCandidates auto
+int property oid_npcInitiativeIncludeFollowers auto
+int property oid_npcInitiativeMaxFollowers auto
+int property oid_showNpcInitiativeMessages auto
+int property oid_npcInitiativeHotkeySkipsThreshold auto
+int property oid_npcInitiativeIgnoreLineOfSight auto
 
 
 int property oid_playerCharacterDescription1 auto
@@ -102,6 +116,7 @@ string property PAGE_PLAYERTRACKING = "Player Tracking" auto
 string property PAGE_TARGETTRACKING = "Target Tracking" auto
 string property PAGE_EQUIPMENT = "Equipment" auto
 string property PAGE_ADVANCED = "Advanced" auto
+string property PAGE_NPCINITIATIVE = "NPC Initiative" auto
 
 
 
@@ -113,7 +128,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 9
+    Return 11
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -121,16 +136,27 @@ event OnVersionUpdate(int a_version)
     self.OnConfigInit()
 EndEvent
 
+Event OnConfigOpen()
+    ; SkyUI's version update does not run on every save, so what version 10 added is also checked whenever the menu opens
+    if Pages.Length < 7
+        OnConfigInit()
+    endIf
+    if repository.npcInitiativeMaxCandidates == 0 ; Never 0 once set: its slider starts at 1
+        repository.assignDefaultSettings(9) ; Only assigns the defaults added in version 10
+    endIf
+EndEvent
+
 Event OnConfigInit()
 	;this part right here name all the pages we'll need (we can add more pages at the end as long as we update the numbers) and declares some variables
     ModName = "Mantella"
-	Pages = new string[6]
+	Pages = new string[7]
     Pages[0] = PAGE_GENERAL
     Pages[1] = PAGE_PLAYER
 	Pages[2] = PAGE_PLAYERTRACKING
 	Pages[3] = PAGE_TARGETTRACKING
     Pages[4] = PAGE_EQUIPMENT
  	Pages[5] = PAGE_ADVANCED
+ 	Pages[6] = PAGE_NPCINITIATIVE
  
     playerAllToggle=true
     playerEquipmentAllToggle=true
@@ -164,7 +190,10 @@ Event OnPageReset(string page)
 	elseif page==PAGE_ADVANCED
 		MantellaMCM_AdvancedSettings.Render(self, repository)
 		MantellaMCMcurrentPage=PAGE_ADVANCED
- 	endif		
+	elseif page==PAGE_NPCINITIATIVE
+		MantellaMCM_NPCInitiativeSettings.Render(self, repository)
+		MantellaMCMcurrentPage=PAGE_NPCINITIATIVE
+ 	endif
 EndEvent
 
 ;This part of the MCM below is a bunch of event listeners, they all use functions to link to the appropriate MCM scripts 
@@ -181,6 +210,8 @@ Event OnOptionSelect(int optionID)
 		MantellaMCM_EquipmentSettings.OptionUpdate(self,optionID, repository)	
 	elseif MantellaMCMcurrentPage ==PAGE_ADVANCED
 		MantellaMCM_AdvancedSettings.OptionUpdate(self,optionID, repository)
+	elseif MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE
+		MantellaMCM_NPCInitiativeSettings.OptionUpdate(self,optionID, repository)
 	endif
 EndEvent 
 
@@ -191,6 +222,8 @@ Event OnOptionSliderOpen(Int optionId)
         MantellaMCM_PlayerSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_ADVANCED
         MantellaMCM_AdvancedSettings.SliderOptionOpen(self,optionID, repository)
+    elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
+        MantellaMCM_NPCInitiativeSettings.SliderOptionOpen(self,optionID, repository)
     endIf
 EndEvent
 
@@ -201,12 +234,14 @@ Event OnOptionSliderAccept(Int optionId, Float value)
         MantellaMCM_PlayerSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_ADVANCED
         MantellaMCM_AdvancedSettings.SliderOptionAccept(self,optionID, value, repository)
+    elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
+        MantellaMCM_NPCInitiativeSettings.SliderOptionAccept(self,optionID, value, repository)
     endIf
 EndEvent
 
 Event OnOptionKeyMapChange(Int a_option, Int a_keyCode, String a_conflictControl, String a_conflictName)
     {Called when a key has been remapped}
-    If 	MantellaMCMcurrentPage ==PAGE_GENERAL
+    If 	MantellaMCMcurrentPage ==PAGE_GENERAL || MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE ; The NPC Initiative hotkey uses the same conflict check
 		MantellaMCM_GeneralSettings.KeyMapChange(self,a_option, a_keyCode, a_conflictControl, a_conflictName, repository)
 	EndIf
 EndEvent
@@ -253,6 +288,33 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("How frequently (in seconds) radiant dialogues should attempt to begin. \nDefault: 10")
     elseIf optionID == oid_showRadiantDialogueMessages
 		SetInfoText("Enable radiant dialogue debuggging messages.")
+
+	elseIf optionID == oid_npcInitiativeEnabled
+		SetInfoText("Nearby NPCs who have a real reason to talk to you (from their memories, private thoughts, personal reflection or role) walk up and start a conversation. Uses the Game Master decision model set in Mantella's settings.")
+	elseIf optionID == oid_npcInitiativeOnLocationChange
+		SetInfoText("Check for an NPC who wants to talk to you when you enter a new location.")
+	elseIf optionID == oid_npcInitiativeIdleMinutes
+		SetInfoText("Also check when you have not talked to anyone for this many real minutes. 0 turns this check off. \nDefault: 10")
+	elseIf optionID == oid_npcInitiativeMinInterval
+		SetInfoText("The shortest time (in seconds) between two checks. \nDefault: 60")
+	elseIf optionID == oid_npcInitiativeSettleDelay
+		SetInfoText("How long (in seconds) to wait after a location change before checking, so the NPCs around you have loaded. \nDefault: 3")
+	elseIf optionID == oid_npcInitiativeMaxDistance
+		SetInfoText("How far from you (in meters) an NPC can be to walk up to you. \nDefault: 10")
+	elseIf optionID == oid_npcInitiativeIgnoreLineOfSight
+		SetInfoText("By default an NPC can only walk up to you if it can see you or you can see it. On: any NPC within Max Distance can, even behind a wall. \nDefault: Off")
+	elseIf optionID == oid_npcInitiativeMaxCandidates
+		SetInfoText("How many of the nearest NPCs are considered in each check. \nDefault: 5")
+	elseIf optionID == oid_npcInitiativeIncludeFollowers
+		SetInfoText("Followers who are following you can also walk up to you. Followers who are waiting somewhere, dismissed followers and potential followers can always approach. \nDefault: On")
+	elseIf optionID == oid_npcInitiativeMaxFollowers
+		SetInfoText("How many of the NPCs in each check can be followers who are following you. The other places go to the nearest other NPCs, so a big group of followers doesn't crowd them out. Only used with Include Active Followers. \nDefault: 2")
+	elseIf optionID == oid_showNpcInitiativeMessages
+		SetInfoText("Enable NPC Initiative debugging messages.")
+	elseIf optionID == oid_keymapNpcInitiativeHotkey
+		SetInfoText("Checks right away for a nearby NPC who wants to talk to you. Works even when NPC Initiative is turned off, and ignores Min Time Between Checks.")
+	elseIf optionID == oid_npcInitiativeHotkeySkipsThreshold
+		SetInfoText("Hotkey checks ignore the NPC Initiative Threshold set in Mantella's settings: the NPC the decision model rates most likely approaches, unless Nobody is its top answer. Only used with a decision model. \nDefault: Off")
 
     elseIf optionID == oid_playerCharacterDescription1	
 		SetInfoText("The description of the player used in the prompt for the LLM. This is not a bio of the player. \nTry to only put things here that are obvious about your character when the NPC meets them. e.g.'A tall and broad Nord man with long red hair''")

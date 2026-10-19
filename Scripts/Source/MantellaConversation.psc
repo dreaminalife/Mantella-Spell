@@ -40,6 +40,11 @@ float httpReceivedTime = 0.0
 string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
 bool _npcInitiative = false
+int _npcEventId = 0 ; The NPC Event the conversation acts out. 0 for any other conversation
+int[] _npcEventNearbyRefids
+bool _npcEventPlayerNoticeable = false
+bool _hasNpcEventMonitorValues = false ; Set once MantellaListenerScript has checked the scene
+int _npcEventAddFailedRefid = 0
 
 event OnInit()
     RegisterForConversationEvents()
@@ -74,11 +79,47 @@ Function SetNpcInitiative()
     _npcInitiative = true
 EndFunction
 
+; The next conversation acts out an NPC Event (see MantellaListenerScript). The id is sent with the start request
+Function SetNpcEvent(int eventId)
+    _npcEventId = eventId
+EndFunction
+
+bool Function IsNpcEvent()
+    return _npcEventId != 0
+EndFunction
+
+; The end was requested and the conversation is waiting for MantellaSoftware to save it
+bool Function IsEnding()
+    return _hasBeenStopped
+EndFunction
+
+; Sent with every continue request of an NPC Event: who is still near the scene, and whether the player can be noticed
+Function SetNpcEventMonitorValues(int[] nearbyRefids, bool playerNoticeable)
+    _npcEventNearbyRefids = nearbyRefids
+    _npcEventPlayerNoticeable = playerNoticeable
+    _hasNpcEventMonitorValues = true
+EndFunction
+
+; The server picked someone near the scene. They join before they speak
+Function AddNpcEventActor(Actor actorToAdd)
+    Actor[] actors = new Actor[1]
+    actors[0] = actorToAdd
+    AddActors(actors)
+    RequestContinueConversation()
+EndFunction
+
+Function NpcEventActorCouldNotBeAdded(int refid)
+    _npcEventAddFailedRefid = refid
+    RequestContinueConversation()
+EndFunction
+
 function StartConversation(Actor[] actorsToStartConversationWith)
     ; Cleared right away, so an early return can't leave it set for the next conversation
     bool isNpcInitiative = _npcInitiative
     _npcInitiative = false
-    if(actorsToStartConversationWith.Length > 2)
+    _hasNpcEventMonitorValues = false
+    _npcEventAddFailedRefid = 0
+    if(actorsToStartConversationWith.Length > 2 && !IsNpcEvent()) ; An NPC Event can start with more people
         Debug.Notification("Cannot start conversation. Conversation is already running.")
         return
     endIf
@@ -93,13 +134,17 @@ function StartConversation(Actor[] actorsToStartConversationWith)
 
     if(actorsToStartConversationWith.Length < 2)
         Debug.Notification("Not enough characters to start a conversation.")
+        _npcEventId = 0
         return
     endIf
-    
+
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_STARTCONVERSATION)
     SKSE_HTTP.setString(handle, mConsts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
     if (isNpcInitiative)
         SKSE_HTTP.setBool(handle, mConsts.KEY_STARTCONVERSATION_NPCINITIATIVE, true)
+    endIf
+    if (IsNpcEvent())
+        SKSE_HTTP.setInt(handle, mConsts.KEY_NPCEVENT_ID, _npcEventId)
     endIf
     BuildContext(true)
     AddCurrentActorsAndContext(handle, true)
@@ -237,6 +282,17 @@ function RequestContinueConversation()
         if _actorsUpdated
             SKSE_HTTP.setNestedDictionariesArray(handle, mConsts.KEY_ACTORS, _actorHandles)
             _actorsUpdated = false
+        endIf
+
+        if IsNpcEvent()
+            if _hasNpcEventMonitorValues
+                SKSE_HTTP.setIntArray(handle, mConsts.KEY_NPCEVENT_NEARBY_REFIDS, _npcEventNearbyRefids)
+                SKSE_HTTP.setBool(handle, mConsts.KEY_NPCEVENT_PLAYERNOTICEABLE, _npcEventPlayerNoticeable)
+            endIf
+            if _npcEventAddFailedRefid != 0
+                SKSE_HTTP.setInt(handle, mConsts.KEY_NPCEVENT_ADDFAILED_REFID, _npcEventAddFailedRefid)
+                _npcEventAddFailedRefid = 0
+            endIf
         endIf
 
         if repository.microphoneEnabled != microphoneEnabledLastKnownStatus
@@ -398,6 +454,8 @@ Function CleanupConversation()
     _isTalking = false
     _lastNpcToSpeak = None
     _lastTopicInfo = 0
+    _npcEventId = 0
+    _hasNpcEventMonitorValues = false
     ;SKSE_HTTP.clearAllDictionaries()
     If (MantellaConversationParticipantsQuest.IsRunning())
         MantellaConversationParticipantsQuest.Stop()
@@ -448,6 +506,13 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
 endFunction
 
 function RequestInterrupt()
+    ; A bystander of an NPC Event steps in. MantellaSoftware learns they joined from the actors sent with their input
+    if(!_hasBeenStopped && IsNpcEvent() && !IsPlayerInConversation())
+        Actor[] actors = new Actor[1]
+        actors[0] = PlayerRef
+        AddActors(actors)
+        Debug.Notification("Joining the conversation...")
+    endif
     ; Nothing to interrupt during the player's turn or without the player (radiant conversations)
     if(_hasBeenStopped || _does_accept_player_input || !IsPlayerInConversation())
         return

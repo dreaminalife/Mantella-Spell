@@ -15,6 +15,7 @@ int property oid_keymapCustomGameEventHotkey auto
 int property oid_keymapRadiantHotkey auto
 int property oid_keymapInterruptHotkey auto
 int property oid_keymapNpcInitiativeHotkey auto
+int property oid_keymapNpcEventHotkey auto
 
 int property oid_showDialogueItems auto
 
@@ -35,6 +36,14 @@ int property oid_npcInitiativeMaxFollowers auto
 int property oid_showNpcInitiativeMessages auto
 int property oid_npcInitiativeHotkeySkipsThreshold auto
 int property oid_npcInitiativeIgnoreLineOfSight auto
+
+int property oid_npcEventEnabled auto
+int property oid_npcEventFrequency auto
+int property oid_npcEventHearingDistance auto
+int property oid_npcEventRequireLineOfSight auto
+int property oid_npcEventIncludeFollowers auto
+int property oid_npcEventMaxCandidates auto
+int property oid_showNpcEventMessages auto
 
 
 int property oid_playerCharacterDescription1 auto
@@ -117,6 +126,7 @@ string property PAGE_TARGETTRACKING = "Target Tracking" auto
 string property PAGE_EQUIPMENT = "Equipment" auto
 string property PAGE_ADVANCED = "Advanced" auto
 string property PAGE_NPCINITIATIVE = "NPC Initiative" auto
+string property PAGE_NPCEVENTS = "NPC Events" auto
 
 
 
@@ -128,7 +138,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 11
+    Return 12
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -137,19 +147,21 @@ event OnVersionUpdate(int a_version)
 EndEvent
 
 Event OnConfigOpen()
-    ; SkyUI's version update does not run on every save, so what version 10 added is also checked whenever the menu opens
-    if Pages.Length < 7
+    ; SkyUI's version update does not run on every save, so what versions 10 and 12 added is also checked whenever the menu opens
+    if Pages.Length < 8
         OnConfigInit()
     endIf
     if repository.npcInitiativeMaxCandidates == 0 ; Never 0 once set: its slider starts at 1
-        repository.assignDefaultSettings(9) ; Only assigns the defaults added in version 10
+        repository.assignDefaultSettings(9) ; Only assigns the defaults added in version 10 and later
+    elseIf repository.npcEventMaxCandidates == 0 ; Never 0 once set: its slider starts at 2
+        repository.assignDefaultSettings(11) ; Only assigns the defaults added in version 12
     endIf
 EndEvent
 
 Event OnConfigInit()
 	;this part right here name all the pages we'll need (we can add more pages at the end as long as we update the numbers) and declares some variables
     ModName = "Mantella"
-	Pages = new string[7]
+	Pages = new string[8]
     Pages[0] = PAGE_GENERAL
     Pages[1] = PAGE_PLAYER
 	Pages[2] = PAGE_PLAYERTRACKING
@@ -157,6 +169,7 @@ Event OnConfigInit()
     Pages[4] = PAGE_EQUIPMENT
  	Pages[5] = PAGE_ADVANCED
  	Pages[6] = PAGE_NPCINITIATIVE
+ 	Pages[7] = PAGE_NPCEVENTS
  
     playerAllToggle=true
     playerEquipmentAllToggle=true
@@ -193,6 +206,9 @@ Event OnPageReset(string page)
 	elseif page==PAGE_NPCINITIATIVE
 		MantellaMCM_NPCInitiativeSettings.Render(self, repository)
 		MantellaMCMcurrentPage=PAGE_NPCINITIATIVE
+	elseif page==PAGE_NPCEVENTS
+		MantellaMCM_NPCEventSettings.Render(self, repository)
+		MantellaMCMcurrentPage=PAGE_NPCEVENTS
  	endif
 EndEvent
 
@@ -212,6 +228,8 @@ Event OnOptionSelect(int optionID)
 		MantellaMCM_AdvancedSettings.OptionUpdate(self,optionID, repository)
 	elseif MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE
 		MantellaMCM_NPCInitiativeSettings.OptionUpdate(self,optionID, repository)
+	elseif MantellaMCMcurrentPage ==PAGE_NPCEVENTS
+		MantellaMCM_NPCEventSettings.OptionUpdate(self,optionID, repository)
 	endif
 EndEvent 
 
@@ -224,6 +242,8 @@ Event OnOptionSliderOpen(Int optionId)
         MantellaMCM_AdvancedSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
         MantellaMCM_NPCInitiativeSettings.SliderOptionOpen(self,optionID, repository)
+    elseif MantellaMCMcurrentPage == PAGE_NPCEVENTS
+        MantellaMCM_NPCEventSettings.SliderOptionOpen(self,optionID, repository)
     endIf
 EndEvent
 
@@ -236,12 +256,14 @@ Event OnOptionSliderAccept(Int optionId, Float value)
         MantellaMCM_AdvancedSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
         MantellaMCM_NPCInitiativeSettings.SliderOptionAccept(self,optionID, value, repository)
+    elseif MantellaMCMcurrentPage == PAGE_NPCEVENTS
+        MantellaMCM_NPCEventSettings.SliderOptionAccept(self,optionID, value, repository)
     endIf
 EndEvent
 
 Event OnOptionKeyMapChange(Int a_option, Int a_keyCode, String a_conflictControl, String a_conflictName)
     {Called when a key has been remapped}
-    If 	MantellaMCMcurrentPage ==PAGE_GENERAL || MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE ; The NPC Initiative hotkey uses the same conflict check
+    If 	MantellaMCMcurrentPage ==PAGE_GENERAL || MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE || MantellaMCMcurrentPage ==PAGE_NPCEVENTS ; The NPC Initiative and NPC Event hotkeys use the same conflict check
 		MantellaMCM_GeneralSettings.KeyMapChange(self,a_option, a_keyCode, a_conflictControl, a_conflictName, repository)
 	EndIf
 EndEvent
@@ -312,9 +334,26 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_showNpcInitiativeMessages
 		SetInfoText("Enable NPC Initiative debugging messages.")
 	elseIf optionID == oid_keymapNpcInitiativeHotkey
-		SetInfoText("Checks right away for a nearby NPC who wants to talk to you. Works even when NPC Initiative is turned off, and ignores Min Time Between Checks.")
+		SetInfoText("Checks right away for a nearby NPC who wants to talk to you. Does nothing while NPC Initiative is turned off. Ignores Min Time Between Checks.")
 	elseIf optionID == oid_npcInitiativeHotkeySkipsThreshold
 		SetInfoText("Hotkey checks ignore the NPC Initiative Threshold set in Mantella's settings: the NPC the decision model rates most likely approaches, unless Nobody is its top answer. Only used with a decision model. \nDefault: Off")
+
+	elseIf optionID == oid_npcEventEnabled
+		SetInfoText("Every so often, Mantella invents a scene between some of the NPCs near you, from their bios and memories, and they act it out. You can watch, walk away or step in with the Mantella spell or hotkey. They may also call you in. Uses the NPC Event Generator model and the Game Master set in Mantella's settings.")
+	elseIf optionID == oid_npcEventFrequency
+		SetInfoText("How often (in real minutes) a new scene is attempted, when no conversation is running. \nDefault: 20")
+	elseIf optionID == oid_npcEventHearingDistance
+		SetInfoText("How far from you (in meters) NPCs can be to take part or be drawn in. A scene you have not joined ends once you are farther than this from everyone in it, and you can only be noticed within this distance. \nDefault: 20")
+	elseIf optionID == oid_npcEventRequireLineOfSight
+		SetInfoText("Off: the NPCs in a scene can notice you whenever you are within Hearing Distance and not sneaking. On: you or one of them must also be able to see the other. \nDefault: Off")
+	elseIf optionID == oid_npcEventIncludeFollowers
+		SetInfoText("Lets your active followers take part in scenes and be drawn into them. A follower stays with you, so a scene they are in does not end when you walk away. \nDefault: Off")
+	elseIf optionID == oid_npcEventMaxCandidates
+		SetInfoText("How many of the nearest NPCs the scene is invented from. The ones not in it can be drawn in later. \nDefault: 6")
+	elseIf optionID == oid_showNpcEventMessages
+		SetInfoText("Enable NPC Event debugging messages.")
+	elseIf optionID == oid_keymapNpcEventHotkey
+		SetInfoText("Attempts a scene right away. Works even when NPC Events are turned off, and ignores Frequency.")
 
     elseIf optionID == oid_playerCharacterDescription1	
 		SetInfoText("The description of the player used in the prompt for the LLM. This is not a bio of the player. \nTry to only put things here that are obvious about your character when the NPC meets them. e.g.'A tall and broad Nord man with long red hair''")

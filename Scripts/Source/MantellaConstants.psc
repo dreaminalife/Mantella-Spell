@@ -49,6 +49,16 @@ string property KEY_STARTCONVERSATION_NPCINITIATIVE = "mantella_npc_initiative" 
 string property KEY_NPCINITIATIVE_CHOSEN_REFID = "mantella_npc_initiative_chosen_refid" auto
 string property KEY_NPCINITIATIVE_SKIPTHRESHOLD = "mantella_npc_initiative_skip_threshold" auto
 
+string property KEY_REQUESTTYPE_NPCEVENT = "mantella_npc_event_check" auto
+string property KEY_REPLYTYPE_NPCEVENT = "mantella_npc_event_result" auto
+string property KEY_REPLYTYPE_NPCEVENT_ADDACTOR = "mantella_npc_event_add_actor" auto
+string property KEY_NPCEVENT_ID = "mantella_npc_event_id" auto
+string property KEY_NPCEVENT_PARTICIPANT_REFIDS = "mantella_npc_event_participant_refids" auto
+string property KEY_NPCEVENT_ADDACTOR_REFID = "mantella_npc_event_add_actor_refid" auto
+string property KEY_NPCEVENT_ADDFAILED_REFID = "mantella_npc_event_add_failed_refid" auto
+string property KEY_NPCEVENT_NEARBY_REFIDS = "mantella_npc_event_nearby_refids" auto
+string property KEY_NPCEVENT_PLAYERNOTICEABLE = "mantella_npc_event_player_noticeable" auto
+
 string property KEY_STARTCONVERSATION_WORLDID = "mantella_worldid" auto
 string property KEY_STARTCONVERSATION_USENARRATOR = "mantella_use_narrator" auto
 string property KEY_CONTINUECONVERSATION_TOPICINFOFILE = "mantella_topicinfofile" auto

@@ -80,7 +80,7 @@ endfunction
 
 function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictControl, String conflictName, MantellaRepository Repository) global
     ;This script is used to check if a key is already used, if it's not it will update to a new value (stored in MantellaRepository) or it will prompt the user to warn him of the conflict. The actual keybind happens in MantellaRepository
-    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapRadiantHotkey || option == mcm.oid_keymapInterruptHotkey || option == mcm.oid_keymapNpcInitiativeHotkey
+    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapRadiantHotkey || option == mcm.oid_keymapInterruptHotkey || option == mcm.oid_keymapNpcInitiativeHotkey || option == mcm.oid_keymapNpcEventHotkey
     if (isOptionHotkey)
         Bool continue = true
         ;below checks if there's already a bound key
@@ -110,6 +110,8 @@ function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictCo
                 repository.BindInterruptHotkey(keyCode)
             elseIf option == mcm.oid_keymapNpcInitiativeHotkey
                 repository.BindNpcInitiativeHotkey(keyCode)
+            elseIf option == mcm.oid_keymapNpcEventHotkey
+                repository.BindNpcEventHotkey(keyCode)
             endif
         endIf
     endIf

@@ -30,6 +30,7 @@ int property MantellaCustomGameEventHotkey auto
 int property MantellaRadiantHotkey auto
 int property MantellaInterruptHotkey auto
 int property MantellaNpcInitiativeHotkey auto
+int property MantellaNpcEventHotkey auto
 
 bool property showDialogueItems auto Conditional
 
@@ -50,6 +51,14 @@ int property npcInitiativeMaxFollowers auto
 bool property npcInitiativeIgnoreLineOfSight auto
 bool property showNpcInitiativeMessages auto
 bool property npcInitiativeHotkeySkipsThreshold auto
+
+bool property npcEventEnabled auto
+float property npcEventFrequency auto ; Minutes
+float property npcEventHearingDistance auto ; Meters
+bool property npcEventRequireLineOfSight auto
+bool property npcEventIncludeFollowers auto ; Off by default: a follower in a scene follows the player, so walking away would never end it
+int property npcEventMaxCandidates auto
+bool property showNpcEventMessages auto
 
 string property playerCharacterDescription1 auto
 string property playerCharacterDescription2 auto
@@ -136,6 +145,16 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 12 || isFirstInit)
+        npcEventEnabled = false
+        npcEventFrequency = 20
+        npcEventHearingDistance = 20
+        npcEventRequireLineOfSight = false
+        npcEventIncludeFollowers = false
+        npcEventMaxCandidates = 6
+        showNpcEventMessages = false
+        MantellaNpcEventHotkey = -1
+    EndIf
     If (lastVersion < 11 || isFirstInit)
         MantellaNpcInitiativeHotkey = -1
         npcInitiativeHotkeySkipsThreshold = false
@@ -307,6 +326,32 @@ function BindNpcInitiativeHotkey(int keyCode)
     RegisterForKey(keyCode)
 endfunction
 
+function BindNpcEventHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings KeyMapChange (from the NPC Events page) when updating the NPC Event hotkey
+    UnregisterForKey(MantellaNpcEventHotkey)
+    MantellaNpcEventHotkey=keyCode
+    RegisterForKey(keyCode)
+endfunction
+
+; Called on every game load (from MantellaListenerScript). A key registration can get lost while the key stays set in the MCM,
+; and then the hotkey does nothing until it is rebound
+function RegisterHotkeys()
+    RegisterHotkey(MantellaStartHotkey)
+    RegisterHotkey(MantellaListenerTextHotkey)
+    RegisterHotkey(MantellaEndHotkey)
+    RegisterHotkey(MantellaCustomGameEventHotkey)
+    RegisterHotkey(MantellaRadiantHotkey)
+    RegisterHotkey(MantellaInterruptHotkey)
+    RegisterHotkey(MantellaNpcInitiativeHotkey)
+    RegisterHotkey(MantellaNpcEventHotkey)
+endfunction
+
+function RegisterHotkey(int keyCode)
+    if keyCode > 0 ; -1 is unbound
+        RegisterForKey(keyCode)
+    endIf
+endfunction
+
 bool Function IsVR()
     return Debug.GetVersionNumber() == "1.4.15.0"
 EndFunction
@@ -372,6 +417,8 @@ Event OnKeyDown(int KeyCode)
             endIf
         elseIf KeyCode == MantellaNpcInitiativeHotkey
             SendModEvent("Mantella_NpcInitiativeHotkey") ; The check lives in MantellaListenerScript
+        elseIf KeyCode == MantellaNpcEventHotkey
+            SendModEvent("Mantella_NpcEventHotkey") ; The check lives in MantellaListenerScript
         elseIf KeyCode == MantellaRadiantHotkey
             radiantEnabled =! radiantEnabled
             if radiantEnabled == True

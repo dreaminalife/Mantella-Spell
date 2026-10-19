@@ -61,66 +61,86 @@ Event OnPlayerLoadGame()
     ;     MantellaMCMQuest.OnConfigInit()
     ;     repository.assignDefaultSettings(0,true)
     ; EndIf
+    repository.RegisterHotkeys()
     RegisterForModEvent("SKSE_HTTP_OnHttpReplyReceived", "OnHttpReplyReceived")
     RegisterForModEvent("Mantella_NpcInitiativeHotkey", "OnNpcInitiativeHotkey")
+    RegisterForModEvent("Mantella_NpcEventHotkey", "OnNpcEventHotkey")
     RegisterForMenu("Loading Menu")
     _lastCell = PlayerRef.GetParentCell()
     ; Real time starts from 0 on every game launch, so times kept in the save would be in the future
     _initiativePending = false
-    _isCheckingInitiative = false ; In case the save was made during a check
+    _eventPending = false
+    _isSendingCheck = false ; In case the save was made during a check
     _lastInitiativeCheckTime = Utility.GetCurrentRealTime()
     _lastPlayerConversationTime = _lastInitiativeCheckTime
     _initiativeSentTime = _lastInitiativeCheckTime
-    RegisterForSingleUpdate(repository.radiantFrequency)
+    _eventSentTime = _lastInitiativeCheckTime
+    _lastEventCheckTime = _lastInitiativeCheckTime
+    _lastRadiantAttemptTime = _lastInitiativeCheckTime
+    RegisterForSingleUpdate(tickSeconds)
 EndEvent
 
+; NPC Initiative, NPC Events and radiant conversations share the one conversation slot. Each has its own frequency, checked on a short tick.
+; Only one of them starts per tick, and nothing starts while a check waits for the server
+float tickSeconds = 5.0
+float _lastRadiantAttemptTime = 0.0
+
 event OnUpdate()
-    bool hasSentInitiativeCheck = false
-    if conversation.IsRunning() && conversation.IsPlayerInConversation()
-        _lastPlayerConversationTime = Utility.GetCurrentRealTime()
-    elseIf repository.npcInitiativeEnabled && repository.npcInitiativeIdleMinutes > 0 && Utility.GetCurrentRealTime() - _lastPlayerConversationTime >= repository.npcInitiativeIdleMinutes * 60
-        hasSentInitiativeCheck = TryNpcInitiative()
+    float now = Utility.GetCurrentRealTime()
+    if conversation.IsRunning()
+        if conversation.IsPlayerInConversation()
+            _lastPlayerConversationTime = now
+        endIf
+        if conversation.IsNpcEvent() && !conversation.IsEnding() ; Saving the memories can take longer than a tick
+            MonitorNpcEvent()
+        endIf
+    elseIf IsCheckPending(now)
+        ; The check's result may start a conversation
+    elseIf repository.npcInitiativeEnabled && repository.npcInitiativeIdleMinutes > 0 && now - _lastPlayerConversationTime >= repository.npcInitiativeIdleMinutes * 60 && TryNpcInitiative()
+        ; Checked first, as it is aimed at the player
+    elseIf repository.npcEventEnabled && TryNpcEvent()
+        ; Sent only once its frequency allows
+    elseIf repository.radiantEnabled && now - _lastRadiantAttemptTime >= repository.radiantFrequency
+        _lastRadiantAttemptTime = now
+        TryRadiantConversation()
     endIf
-    ; No radiant attempt in the same tick, so a radiant conversation and the NPC Initiative check don't start together
-    if repository.radiantEnabled && !hasSentInitiativeCheck
-        ; if no Mantella conversation active
-        if !conversation.IsRunning()
-            ;MantellaActorList taken from this tutorial:
-            ;http://skyrimmw.weebly.com/skyrim-modding/detecting-nearby-actors-skyrim-modding-tutorial
-            MantellaActorPicker.start()
+    RegisterForSingleUpdate(tickSeconds)
+endEvent
 
-            ; if both actors found
-            if (PotentialActor1.GetReference() as Actor) && (PotentialActor2.GetReference() as Actor)
-                Actor Actor1 = PotentialActor1.GetReference() as Actor
-                Actor Actor2 = PotentialActor2.GetReference() as Actor
+Function TryRadiantConversation()
+    ;MantellaActorList taken from this tutorial:
+    ;http://skyrimmw.weebly.com/skyrim-modding/detecting-nearby-actors-skyrim-modding-tutorial
+    MantellaActorPicker.start()
 
-                float distanceToClosestActor = PlayerRef.GetDistance(Actor1)
-                float maxDistance = ConvertMeterToGameUnits(repository.radiantDistance)
-                if distanceToClosestActor <= maxDistance
-                    String Actor1Name = Actor1.getdisplayname()
-                    String Actor2Name = Actor2.getdisplayname()
-                    float distanceBetweenActors = Actor1.GetDistance(Actor2)
+    ; if both actors found
+    if (PotentialActor1.GetReference() as Actor) && (PotentialActor2.GetReference() as Actor)
+        Actor Actor1 = PotentialActor1.GetReference() as Actor
+        Actor Actor2 = PotentialActor2.GetReference() as Actor
 
-                    ;TODO: make distanceBetweenActors customisable
-                    if (distanceBetweenActors <= 1000)
-                        ;have spell casted on Actor 1 by Actor 2
-                        MantellaSpell.Cast(Actor2 as ObjectReference, Actor1 as ObjectReference)
-                    elseif(repository.showRadiantDialogueMessages)
-                        Debug.Notification("Radiant dialogue attempted. No NPCs available")
-                    endIf
-                elseif(repository.showRadiantDialogueMessages)
-                    Debug.Notification("Radiant dialogue attempted. NPCs too far away at " + ConvertGameUnitsToMeter(distanceToClosestActor) + " meters")
-                    Debug.Notification("Max distance set to " + repository.radiantDistance + "m in Mantella MCM")
-                endIf
+        float distanceToClosestActor = PlayerRef.GetDistance(Actor1)
+        float maxDistance = ConvertMeterToGameUnits(repository.radiantDistance)
+        if distanceToClosestActor <= maxDistance
+            String Actor1Name = Actor1.getdisplayname()
+            String Actor2Name = Actor2.getdisplayname()
+            float distanceBetweenActors = Actor1.GetDistance(Actor2)
+
+            ;TODO: make distanceBetweenActors customisable
+            if (distanceBetweenActors <= 1000)
+                ;have spell casted on Actor 1 by Actor 2
+                MantellaSpell.Cast(Actor2 as ObjectReference, Actor1 as ObjectReference)
             elseif(repository.showRadiantDialogueMessages)
                 Debug.Notification("Radiant dialogue attempted. No NPCs available")
             endIf
-
-            MantellaActorPicker.stop()
+        elseif(repository.showRadiantDialogueMessages)
+            Debug.Notification("Radiant dialogue attempted. NPCs too far away at " + ConvertGameUnitsToMeter(distanceToClosestActor) + " meters")
+            Debug.Notification("Max distance set to " + repository.radiantDistance + "m in Mantella MCM")
         endIf
+    elseif(repository.showRadiantDialogueMessages)
+        Debug.Notification("Radiant dialogue attempted. No NPCs available")
     endIf
-    RegisterForSingleUpdate(repository.radiantFrequency)
-endEvent
+
+    MantellaActorPicker.stop()
+EndFunction
 
 
 ;All the event listeners  below have 'if' clauses added after Mantella 0.9.2 (except ondying)
@@ -320,10 +340,13 @@ bool _initiativePending = false
 Actor[] _initiativeCandidates
 int _initiativeCandidateCount = 0
 float initiativePendingTimeout = 30.0 ; Seconds. An error reply can't be told apart from other requests' errors, so a lost reply times out
-bool _isCheckingInitiative = false
+bool _isSendingCheck = false ; Shared by NPC Initiative and NPC Events, so only one check is sent at a time
 
-; The hotkey checks right away, even when NPC Initiative is off or a check ran recently
+; The hotkey checks right away, even when a check ran recently. It does nothing while NPC Initiative is off
 Event OnNpcInitiativeHotkey(string eventName, string strArg, float numArg, Form sender)
+    if !repository.npcInitiativeEnabled
+        return
+    endIf
     if TryNpcInitiative(true)
         if !repository.showNpcInitiativeMessages ; Otherwise the check already named the NPCs it considers
             Debug.Notification("NPC Initiative: checking nearby NPCs")
@@ -337,21 +360,21 @@ EndEvent
 bool Function TryNpcInitiative(bool isManual = false)
     ; Calls into other scripts let other events run, so a location change and the idle timer could otherwise check at the same time.
     ; Nothing may call another script between this test and the set
-    if _isCheckingInitiative
+    if _isSendingCheck
         return false
     endIf
-    _isCheckingInitiative = true
+    _isSendingCheck = true
     bool hasSent = RunNpcInitiativeCheck(isManual)
-    _isCheckingInitiative = false
+    _isSendingCheck = false
     return hasSent
 EndFunction
 
 bool Function RunNpcInitiativeCheck(bool isManual)
-    if (!repository.npcInitiativeEnabled && !isManual) || conversation.IsRunning()
+    if !repository.npcInitiativeEnabled || conversation.IsRunning()
         return false
     endIf
     float now = Utility.GetCurrentRealTime()
-    if _initiativePending && now - _initiativeSentTime < initiativePendingTimeout
+    if IsCheckPending(now)
         return false
     endIf
     if (!isManual && now - _lastInitiativeCheckTime < repository.npcInitiativeMinInterval) || !CanPlayerBeApproached()
@@ -410,17 +433,27 @@ bool Function CanPlayerBeApproached()
     return !conversation.IsRunning() && !PlayerRef.IsInCombat() && !PlayerRef.IsSneaking() && !Utility.IsInMenuMode() && !UI.IsMenuOpen("Dialogue Menu")
 EndFunction
 
-bool Function IsInitiativeCandidate(Actor npc)
+; True while a check sent to the server has not been answered yet. Its result may start a conversation
+bool Function IsCheckPending(float now)
+    return (_initiativePending && now - _initiativeSentTime < initiativePendingTimeout) || (_eventPending && now - _eventSentTime < eventPendingTimeout)
+EndFunction
+
+; Alive, awake, not hostile and free to talk. Used by NPC Initiative and NPC Events
+bool Function IsAvailableNpc(Actor npc)
     if !npc || npc == PlayerRef || npc.IsDisabled() || npc.IsDead() || npc.IsUnconscious() || npc.IsBleedingOut()
         return false
     endIf
     if npc.IsHostileToActor(PlayerRef) || npc.IsInCombat()
         return false
     endIf
-    if !repository.npcInitiativeIncludeFollowers && IsActiveFollower(npc)
+    return npc.GetSleepState() != 3 && !npc.IsInDialogueWithPlayer() ; 3 is asleep
+EndFunction
+
+bool Function IsInitiativeCandidate(Actor npc)
+    if !IsAvailableNpc(npc)
         return false
     endIf
-    if npc.GetSleepState() == 3 || npc.IsInDialogueWithPlayer() ; 3 is asleep
+    if !repository.npcInitiativeIncludeFollowers && IsActiveFollower(npc)
         return false
     endIf
     ; Either one seeing the other counts: the NPC's side lets NPCs behind the player count, the player's side lets
@@ -516,9 +549,240 @@ int Function ClampInt(int value, int min, int max)
     return value
 EndFunction
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;          NPC Events         ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Mantella's server invents a scene between some of the NPCs near the player, who then act it out while the player is a bystander.
+; The player can watch, walk away or step in, and the NPCs can draw in others nearby, the player included.
+
+float _lastEventCheckTime = 0.0
+float _eventSentTime = 0.0
+bool _eventPending = false
+float eventPendingTimeout = 90.0 ; Seconds. The event generator writes a whole scene, so it can take longer than an NPC Initiative check
+Actor[] _eventCandidates ; The NPCs sent with the last check. The scene's participants and the people near it are among them
+int _eventCandidateCount = 0
+
+; The hotkey checks right away, even when NPC Events are off or a check ran recently
+Event OnNpcEventHotkey(string eventName, string strArg, float numArg, Form sender)
+    if !TryNpcEvent(true)
+        Debug.Notification("NPC Event: can't check right now")
+    elseIf !repository.showNpcEventMessages ; Otherwise the check already named the NPCs it considers
+        Debug.Notification("NPC Event: checking nearby NPCs")
+    endIf
+EndEvent
+
+; Returns true if a check was sent to the server
+bool Function TryNpcEvent(bool isManual = false)
+    if _isSendingCheck
+        return false
+    endIf
+    _isSendingCheck = true
+    bool hasSent = RunNpcEventCheck(isManual)
+    _isSendingCheck = false
+    return hasSent
+EndFunction
+
+bool Function RunNpcEventCheck(bool isManual)
+    if (!repository.npcEventEnabled && !isManual) || !CanNpcEventStart()
+        return false
+    endIf
+    float now = Utility.GetCurrentRealTime()
+    if IsCheckPending(now) || (!isManual && now - _lastEventCheckTime < repository.npcEventFrequency * 60)
+        return false
+    endIf
+    _lastEventCheckTime = now
+
+    FindNpcEventCandidates()
+    if _eventCandidateCount < 2
+        if repository.showNpcEventMessages
+            Debug.Notification("NPC Event: not enough NPCs nearby")
+        endIf
+        return false
+    endIf
+
+    MantellaConstants consts = conversation.mConsts
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, consts.KEY_REQUESTTYPE, consts.KEY_REQUESTTYPE_NPCEVENT)
+    SKSE_HTTP.setString(handle, consts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
+
+    int[] actorHandles = Utility.CreateIntArray(_eventCandidateCount + 1)
+    actorHandles[0] = conversation.buildActorSetting(PlayerRef)
+    string candidateNames = ""
+    int i = 0
+    while i < _eventCandidateCount
+        actorHandles[i + 1] = conversation.buildActorSetting(_eventCandidates[i])
+        candidateNames += _eventCandidates[i].GetDisplayName() + " "
+        i += 1
+    endWhile
+    SKSE_HTTP.setNestedDictionariesArray(handle, consts.KEY_ACTORS, actorHandles)
+
+    int contextHandle = SKSE_HTTP.createDictionary()
+    string locationName = "Skyrim"
+    Location currentLocation = PlayerRef.GetCurrentLocation()
+    if currentLocation && currentLocation.GetName() != ""
+        locationName = currentLocation.GetName()
+    endIf
+    SKSE_HTTP.setString(contextHandle, consts.KEY_CONTEXT_LOCATION, locationName)
+    SKSE_HTTP.setInt(contextHandle, consts.KEY_CONTEXT_TIME, conversation.GetCurrentHourOfDay())
+    conversation.AddCurrentWeather(contextHandle)
+    SKSE_HTTP.setNestedDictionary(handle, consts.KEY_CONTEXT, contextHandle)
+
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
+    _eventPending = true
+    _eventSentTime = now
+    if repository.showNpcEventMessages
+        Debug.Notification("NPC Event check: " + candidateNames)
+    endIf
+    return true
+EndFunction
+
+; The player can be sneaking: watching unseen is part of it
+bool Function CanNpcEventStart()
+    return !conversation.IsRunning() && !PlayerRef.IsInCombat() && !Utility.IsInMenuMode() && !UI.IsMenuOpen("Dialogue Menu")
+EndFunction
+
+; Keeps the nearest available NPCs within hearing distance in _eventCandidates. Line of sight is not needed
+Function FindNpcEventCandidates()
+    int maxCount = ClampInt(repository.npcEventMaxCandidates, 2, 10)
+    _eventCandidates = new Actor[10]
+    float[] distances = new float[10]
+    _eventCandidateCount = 0
+    ; ScanCellNPCs' own keyword filter misses keywords that come from the race, like ActorTypeNPC, so it is checked here
+    Keyword actorTypeNPC = Keyword.GetKeyword("ActorTypeNPC")
+    Actor[] found = MiscUtil.ScanCellNPCs(PlayerRef, ConvertMeterToGameUnits(repository.npcEventHearingDistance))
+    Actor npc
+    int i = 0
+    while i < found.Length
+        npc = found[i]
+        if npc.HasKeyword(actorTypeNPC) && IsAvailableNpc(npc) && (repository.npcEventIncludeFollowers || !IsActiveFollower(npc))
+            _eventCandidateCount = InsertByDistance(_eventCandidates, distances, _eventCandidateCount, maxCount, npc, PlayerRef.GetDistance(npc))
+        endIf
+        i += 1
+    endWhile
+EndFunction
+
+Actor Function FindNpcEventCandidate(int refid)
+    int i = 0
+    while i < _eventCandidateCount
+        if (_eventCandidates[i] as Form).GetFormID() == refid
+            return _eventCandidates[i]
+        endIf
+        i += 1
+    endWhile
+    return None
+EndFunction
+
+Function OnNpcEventResult(int handle)
+    MantellaConstants consts = conversation.mConsts
+    _eventPending = false
+    int eventId = SKSE_HTTP.getInt(handle, consts.KEY_NPCEVENT_ID, 0)
+    int[] refids = SKSE_HTTP.getIntArray(handle, consts.KEY_NPCEVENT_PARTICIPANT_REFIDS)
+    if eventId == 0 || refids.Length < 2
+        if repository.showNpcEventMessages
+            Debug.Notification("NPC Event: nothing happens")
+        endIf
+        return
+    endIf
+    ; The situation may have changed while the server wrote the event
+    Actor[] participants = PapyrusUtil.ActorArray(refids.Length)
+    string names = ""
+    int i = 0
+    while i < refids.Length
+        Actor npc = FindNpcEventCandidate(refids[i])
+        if !npc || !IsAvailableNpc(npc) || !CanNpcEventStart()
+            if repository.showNpcEventMessages
+                Debug.Notification("NPC Event: can no longer start")
+            endIf
+            return
+        endIf
+        participants[i] = npc
+        names += npc.GetDisplayName() + " "
+        i += 1
+    endWhile
+    if repository.showNpcEventMessages
+        Debug.Notification("NPC Event starts: " + names)
+    endIf
+    conversation.Start()
+    conversation.SetNpcEvent(eventId)
+    conversation.StartConversation(participants)
+EndFunction
+
+; The server picked someone near the scene, who joins before they speak
+Function AddNpcEventActor(int refid)
+    if !conversation.IsRunning() || !conversation.IsNpcEvent()
+        return
+    endIf
+    if refid == (PlayerRef as Form).GetFormID()
+        conversation.AddNpcEventActor(PlayerRef)
+        return
+    endIf
+    Actor npc = FindNpcEventCandidate(refid)
+    if npc && IsAvailableNpc(npc) && PlayerRef.GetDistance(npc) <= ConvertMeterToGameUnits(repository.npcEventHearingDistance)
+        conversation.AddNpcEventActor(npc)
+    else
+        conversation.NpcEventActorCouldNotBeAdded(refid)
+    endIf
+EndFunction
+
+; Runs on every tick while an NPC Event is running. Ends the scene once a bystander player has walked away,
+; and tells the server who is still near the scene and whether the player can be noticed
+Function MonitorNpcEvent()
+    float hearingDistance = ConvertMeterToGameUnits(repository.npcEventHearingDistance)
+    bool isPlayerInScene = conversation.IsPlayerInConversation()
+    float nearestDistance = -1.0
+    bool isInSight = false
+    int i = 0
+    while i < conversation.CountActorsInConversation()
+        Actor participant = conversation.GetActorInConversationByIndex(i)
+        if participant && participant != PlayerRef
+            float distance = PlayerRef.GetDistance(participant)
+            if nearestDistance < 0 || distance < nearestDistance
+                nearestDistance = distance
+            endIf
+            ; Either one seeing the other counts, as for NPC Initiative
+            if repository.npcEventRequireLineOfSight && !isInSight && distance <= hearingDistance
+                isInSight = participant.HasLOS(PlayerRef) || PlayerRef.HasLOS(participant)
+            endIf
+        endIf
+        i += 1
+    endWhile
+    if nearestDistance < 0
+        return ; The scene is still starting and nobody has been added yet. A scene that loses its NPCs is ended by RemoveActors
+    endIf
+    if !isPlayerInScene && nearestDistance > hearingDistance
+        if repository.showNpcEventMessages
+            Debug.Notification("NPC Event: you walked away")
+        endIf
+        conversation.EndConversation()
+        return
+    endIf
+    bool isNoticeable = !isPlayerInScene && nearestDistance <= hearingDistance && !PlayerRef.IsSneaking() && (isInSight || !repository.npcEventRequireLineOfSight)
+
+    ; Starts with a 0 that matches nobody, so the array is never empty and "nobody nearby" still reaches the server
+    int[] nearbyRefids = Utility.CreateIntArray(_eventCandidateCount + 1)
+    int nearbyCount = 1
+    i = 0
+    while i < _eventCandidateCount
+        Actor npc = _eventCandidates[i]
+        if !conversation.Participants.HasForm(npc) && IsAvailableNpc(npc) && PlayerRef.GetDistance(npc) <= hearingDistance
+            nearbyRefids[nearbyCount] = (npc as Form).GetFormID()
+            nearbyCount += 1
+        endIf
+        i += 1
+    endWhile
+    conversation.SetNpcEventMonitorValues(Utility.ResizeIntArray(nearbyRefids, nearbyCount), isNoticeable)
+EndFunction
+
 event OnHttpReplyReceived(int typedDictionaryHandle)
     MantellaConstants consts = conversation.mConsts
-    if SKSE_HTTP.getString(typedDictionaryHandle, consts.KEY_REPLYTYPE, "") != consts.KEY_REPLYTYPE_NPCINITIATIVE
+    string replyType = SKSE_HTTP.getString(typedDictionaryHandle, consts.KEY_REPLYTYPE, "")
+    if replyType == consts.KEY_REPLYTYPE_NPCEVENT
+        OnNpcEventResult(typedDictionaryHandle)
+        return
+    elseIf replyType == consts.KEY_REPLYTYPE_NPCEVENT_ADDACTOR
+        AddNpcEventActor(SKSE_HTTP.getInt(typedDictionaryHandle, consts.KEY_NPCEVENT_ADDACTOR_REFID, 0))
+        return
+    elseIf replyType != consts.KEY_REPLYTYPE_NPCINITIATIVE
         return
     endIf
     _initiativePending = false

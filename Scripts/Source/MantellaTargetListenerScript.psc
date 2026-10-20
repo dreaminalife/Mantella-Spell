@@ -197,8 +197,23 @@ Event OnGetUp(ObjectReference akFurniture)
 EndEvent
 
 
+; The conversation goes on without the dead NPC. It only ends if fewer than two participants are left
 Event OnDying(Actor akKiller)
     If (conversation.IsRunning())
-        conversation.EndConversation()
+        Actor selfActor = self.GetActorReference()
+        If (!selfActor) ; The alias was cleared, e.g. by another participant leaving at the same time
+            return
+        EndIf
+        String deathMessage = selfActor.GetDisplayName() + " died"
+        If (akKiller == PlayerRef)
+            deathMessage = selfActor.GetDisplayName() + " was killed by " + getPlayerName(False)
+        ElseIf (akKiller)
+            deathMessage = selfActor.GetDisplayName() + " was killed by " + akKiller.GetDisplayName()
+        EndIf
+        AddIngameEventToConversation(deathMessage)
+
+        Actor[] actors = new Actor[1]
+        actors[0] = selfActor
+        conversation.RemoveActorsFromConversation(actors)
     EndIf
 EndEvent

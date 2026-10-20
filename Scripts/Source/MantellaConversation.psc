@@ -450,6 +450,7 @@ Function CleanupConversation()
     ClearParticipants()
     ClearRepeatingMessage()
     _ingameEvents = None
+    _cooldownEvents = None ; So a cooldown from this conversation does not hide events in the next one
     _does_accept_player_input = false
     _isTalking = false
     _lastNpcToSpeak = None
@@ -709,6 +710,36 @@ Function AddIngameEvent(string eventText)
         endif
         _ingameEvents[_ingameEvents.Length - 1] = eventText
     endIf
+EndFunction
+
+; The hits, spell casts and bow shots added most recently and when, so one that keeps repeating (eg a continuous spell) is only added once per cooldown
+String[] _cooldownEvents
+float[] _cooldownEventTimes
+int _nextCooldownEvent = 0
+
+Function AddIngameEventWithCooldown(string eventText)
+    float cooldown = repository.eventRepeatCooldown
+    if cooldown <= 0 ; Not set yet: the MCM version update has not run on this save
+        cooldown = 10
+    endIf
+    if !_cooldownEvents
+        _cooldownEvents = new String[32]
+        _cooldownEventTimes = new float[32]
+    endIf
+    float now = Utility.GetCurrentRealTime()
+    int index = _cooldownEvents.Find(eventText)
+    if index >= 0
+        float elapsed = now - _cooldownEventTimes[index]
+        if elapsed >= 0 && elapsed < cooldown ; Real time starts from 0 on every game launch, so a time kept in the save can be in the future
+            return
+        endIf
+    else
+        index = _nextCooldownEvent
+        _cooldownEvents[index] = eventText
+        _nextCooldownEvent = (index + 1) % _cooldownEvents.Length
+    endIf
+    _cooldownEventTimes[index] = now
+    AddIngameEvent(eventText)
 EndFunction
 
 Function ClearIngameEvent()

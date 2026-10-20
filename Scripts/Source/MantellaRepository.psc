@@ -81,6 +81,7 @@ bool property playerTrackingOnGetUp auto
 bool property playerTrackingOnLocationChange auto
 bool property playerTrackingOnTimeChange auto
 bool property playerTrackingOnWeatherChange auto
+float property eventRepeatCooldown auto ; Seconds before the same hit, spell cast or bow shot can be added again
 
 
 bool property playerEquipmentBody auto
@@ -145,6 +146,9 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 13 || isFirstInit)
+        eventRepeatCooldown = 10
+    EndIf
     If (lastVersion < 12 || isFirstInit)
         npcEventEnabled = false
         npcEventFrequency = 20

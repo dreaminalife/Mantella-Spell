@@ -29,6 +29,25 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_playerTrackingOnLocationChange=mcm.AddToggleOption("Location Changed", repository.playerTrackingOnLocationChange)
     mcm.oid_playerTrackingOnTimeChange=mcm.AddToggleOption("Time Changed", repository.playerTrackingOnTimeChange)
     mcm.oid_playerTrackingOnWeatherChange=mcm.AddToggleOption("Weather Changed", repository.playerTrackingOnWeatherChange)
+
+    mcm.AddHeaderOption ("Repeated Events")
+    mcm.oid_eventRepeatCooldown=mcm.AddSliderOption("Repeat Cooldown (seconds)", repository.eventRepeatCooldown)
+endfunction
+
+function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repository) global
+    if optionID == mcm.oid_eventRepeatCooldown
+        mcm.SetSliderDialogStartValue(repository.eventRepeatCooldown)
+        mcm.SetSliderDialogDefaultValue(10)
+        mcm.SetSliderDialogRange(1, 120)
+        mcm.SetSliderDialogInterval(1)
+    endif
+endfunction
+
+function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, MantellaRepository Repository) global
+    mcm.SetSliderOptionValue(optionId, value)
+    If optionId == mcm.oid_eventRepeatCooldown
+        Repository.eventRepeatCooldown = value
+    EndIf
 endfunction
 
 

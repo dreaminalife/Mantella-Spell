@@ -71,6 +71,7 @@ bool property playerAllToggle auto
 int property oid_playerTrackingOnLocationChange auto
 int property oid_playerTrackingOnTimeChange auto
 int property oid_playerTrackingOnWeatherChange auto
+int property oid_eventRepeatCooldown auto
 
 
 int property oid_playerEquipmentBody auto
@@ -138,7 +139,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 12
+    Return 13
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -147,14 +148,16 @@ event OnVersionUpdate(int a_version)
 EndEvent
 
 Event OnConfigOpen()
-    ; SkyUI's version update does not run on every save, so what versions 10 and 12 added is also checked whenever the menu opens
+    ; SkyUI's version update does not run on every save, so what versions 10, 12 and 13 added is also checked whenever the menu opens
     if Pages.Length < 8
         OnConfigInit()
     endIf
     if repository.npcInitiativeMaxCandidates == 0 ; Never 0 once set: its slider starts at 1
         repository.assignDefaultSettings(9) ; Only assigns the defaults added in version 10 and later
     elseIf repository.npcEventMaxCandidates == 0 ; Never 0 once set: its slider starts at 2
-        repository.assignDefaultSettings(11) ; Only assigns the defaults added in version 12
+        repository.assignDefaultSettings(11) ; Only assigns the defaults added in version 12 and later
+    elseIf repository.eventRepeatCooldown == 0 ; Never 0 once set: its slider starts at 1
+        repository.assignDefaultSettings(12) ; Only assigns the defaults added in version 13
     endIf
 EndEvent
 
@@ -238,6 +241,8 @@ Event OnOptionSliderOpen(Int optionId)
 		MantellaMCM_GeneralSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_PLAYER
         MantellaMCM_PlayerSettings.SliderOptionOpen(self,optionID, repository)
+    elseif MantellaMCMcurrentPage == PAGE_PLAYERTRACKING
+        MantellaMCM_PlayerTrackingSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_ADVANCED
         MantellaMCM_AdvancedSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
@@ -252,6 +257,8 @@ Event OnOptionSliderAccept(Int optionId, Float value)
 		MantellaMCM_GeneralSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_PLAYER
         MantellaMCM_PlayerSettings.SliderOptionAccept(self,optionID, value, repository)
+    elseif MantellaMCMcurrentPage == PAGE_PLAYERTRACKING
+        MantellaMCM_PlayerTrackingSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_ADVANCED
         MantellaMCM_AdvancedSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
@@ -397,6 +404,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Tracks time changes while a Mantella conversation is active.")
     elseIf optionID == oid_playerTrackingOnWeatherChange	
 		SetInfoText("Tracks weather changes while a Mantella conversation is active.")
+    elseIf optionID == oid_eventRepeatCooldown
+		SetInfoText("How long (in seconds) before the exact same hit, spell cast or bow shot (by or on the player or a target) can be tracked again, so one that keeps repeating (eg a continuous spell hitting someone) does not flood the conversation. Other events are always tracked. \nDefault: 10")
 
     elseIf optionID == oid_playerEquipmentBody	
 		SetInfoText("Describe item in the body slot (32) of the player to the LLM.")

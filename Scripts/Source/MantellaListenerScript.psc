@@ -25,9 +25,13 @@ event OnInit()
     Debug.Notification("Please save and reload to activate Mantella.")
 endEvent
 
-Function AddIngameEventToConversation(string eventText)
+Function AddIngameEventToConversation(string eventText, bool withCooldown = false)
     If (conversation.IsRunning())
-        conversation.AddIngameEvent(eventText)
+        If (withCooldown) ; For events that can repeat many times a second, like hits and spell casts
+            conversation.AddIngameEventWithCooldown(eventText)
+        Else
+            conversation.AddIngameEvent(eventText)
+        EndIf
     EndIf
 EndFunction
 
@@ -194,39 +198,29 @@ Event OnSpellCast(Form akSpell)
         if spellCast 
             if (spellCast != "Mantella") && (spellCast != "Mantella Remove NPC") && (spellCast != "Mantella End Conversation")
                 ;Debug.Notification("The player casted the spell "+ spellCast)
-                AddIngameEventToConversation(getPlayerName() + " casted the spell / consumed " + spellCast )
+                AddIngameEventToConversation(getPlayerName() + " casted the spell / consumed " + spellCast , true)
             endIf
         endIf
     endif
 endEvent
 
 
-String lastHitSource = ""
-String lastAggressor = ""
-Int timesHitSameAggressorSource = 0
 Event OnHit(ObjectReference akAggressor, Form akSource, Projectile akProjectile, bool abPowerAttack, bool abSneakAttack, bool abBashAttack, bool abHitBlocked)
     if repository.playerTrackingOnHit
         string aggressor = akAggressor.getdisplayname()
         string hitSource = akSource.getname()
 
-        ; avoid writing events too often (continuous spells record very frequently)
-        ; if the actor and weapon hasn't changed, only record the event every 5 hits
-        if ((hitSource != lastHitSource) && (aggressor != lastAggressor)) || (timesHitSameAggressorSource > 5) && (hitSource != "Mantella") && (hitSource != "Mantella Remove NPC") && (hitSource != "Mantella End Conversation")
-            lastHitSource = hitSource
-            lastAggressor = aggressor
-            timesHitSameAggressorSource = 0
-            
+        ; Continuous spells hit very frequently, so repeats are limited by the event repeat cooldown
+        if (hitSource != "Mantella") && (hitSource != "Mantella Remove NPC") && (hitSource != "Mantella End Conversation")
             if (aggressor == "None") || (aggressor == "")
-                AddIngameEventToConversation(getPlayerName() + " took damage.")
+                AddIngameEventToConversation(getPlayerName() + " took damage.", true)
             elseif (hitSource == "None") || (hitSource == "")
                 ;Debug.MessageBox(aggressor + " punched the player.")
-                AddIngameEventToConversation(aggressor + " punched " + getPlayerName(False) + " .")
+                AddIngameEventToConversation(aggressor + " punched " + getPlayerName(False) + " .", true)
             else
                 ;Debug.MessageBox(aggressor + " hit the player with " + hitSource)
-                AddIngameEventToConversation(aggressor + " hit " + getPlayerName(False) + " with " + hitSource)
+                AddIngameEventToConversation(aggressor + " hit " + getPlayerName(False) + " with " + hitSource, true)
             endIf
-        else
-            timesHitSameAggressorSource += 1
         endIf
     endif
 EndEvent
@@ -297,7 +291,7 @@ endEvent
 Event OnPlayerBowShot(Weapon akWeapon, Ammo akAmmo, float afPower, bool abSunGazing)
     if repository.playerTrackingOnPlayerBowShot
         ;Debug.MessageBox("The player fired an arrow.")
-        AddIngameEventToConversation(getPlayerName() + " fired an arrow.")
+        AddIngameEventToConversation(getPlayerName() + " fired an arrow.", true)
     endif
 endEvent
 

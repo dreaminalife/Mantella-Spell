@@ -22,6 +22,7 @@ ReferenceAlias Property Narrator Auto
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 String[] _ingameEvents
+String[] _flushedEvents ; The events moved into the last built context, put back if that context is never sent
 String[] _extraRequestActions
 int[] _actorHandles = None
 bool _actorsUpdated = false
@@ -450,6 +451,7 @@ Function CleanupConversation()
     ClearParticipants()
     ClearRepeatingMessage()
     _ingameEvents = None
+    _flushedEvents = None
     _cooldownEvents = None ; So a cooldown from this conversation does not hide events in the next one
     _does_accept_player_input = false
     _isTalking = false
@@ -503,6 +505,7 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
         SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_CONTEXT, _contextHandle)
 
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+        _flushedEvents = None
     EndIf
 endFunction
 
@@ -555,6 +558,9 @@ function GetPlayerTextInput()
         sendRequestForPlayerInput(result, updateContext=False)
         _does_accept_player_input = False
         ClearRepeatingMessage()
+    else
+        ; The text box was cancelled, so the context built above is never sent. Keep its events for the next attempt
+        RestoreFlushedEvents()
     endIf
 endFunction
 
@@ -744,6 +750,23 @@ EndFunction
 
 Function ClearIngameEvent()
     _ingameEvents = Utility.CreateStringArray(0)
+EndFunction
+
+; Puts the events of an unsent context back in front of the ones added since
+Function RestoreFlushedEvents()
+    if !_flushedEvents
+        return
+    endIf
+    string[] newerEvents = _ingameEvents
+    _ingameEvents = _flushedEvents
+    _flushedEvents = None
+    if newerEvents
+        int i = 0
+        While i < newerEvents.Length
+            AddIngameEvent(newerEvents[i])
+            i += 1
+        EndWhile
+    endIf
 EndFunction
 
 event OnAddEventReceived(string text)
@@ -1012,6 +1035,7 @@ int function BuildContext(bool isConversationStart = false)
     SKSE_HTTP.setInt(_contextHandle, mConsts.KEY_CONTEXT_TIME, _initialTime)
 
     string[] past_events = deepcopy(_ingameEvents)
+    _flushedEvents = past_events
     SKSE_HTTP.setStringArray(_contextHandle, mConsts.KEY_CONTEXT_INGAMEEVENTS, past_events)
     ClearIngameEvent()
 endFunction
@@ -1046,10 +1070,9 @@ endFunction
 
 Function ShowRepeatingMessage(string messageToShow)
     _repeatingMessage = messageToShow
-    if repository.showReminderMessages
-        Debug.Notification(_repeatingMessage)
-    else
-        RegisterForSingleUpdate(0)
+    Debug.Notification(_repeatingMessage)
+    if repository.showReminderMessages ; OnUpdate repeats it until it is cleared
+        RegisterForSingleUpdate(10)
     endIf
 EndFunction
 

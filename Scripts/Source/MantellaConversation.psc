@@ -46,6 +46,7 @@ int[] _npcEventNearbyRefids
 bool _npcEventPlayerNoticeable = false
 bool _hasNpcEventMonitorValues = false ; Set once MantellaListenerScript has checked the scene
 int _npcEventAddFailedRefid = 0
+bool _sendQuestChecksCatchUp = false ; Set when the start reply brought a new quest check list: fresh answers go with the next continue request
 
 event OnInit()
     RegisterForConversationEvents()
@@ -120,6 +121,7 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     _npcInitiative = false
     _hasNpcEventMonitorValues = false
     _npcEventAddFailedRefid = 0
+    _sendQuestChecksCatchUp = false
     if(actorsToStartConversationWith.Length > 2 && !IsNpcEvent()) ; An NPC Event can start with more people
         Debug.Notification("Cannot start conversation. Conversation is already running.")
         return
@@ -236,6 +238,13 @@ function ContinueConversation(string nextAction, int handle)
         if(SKSE_HTTP.hasKey(handle,mConsts.KEY_STARTCONVERSATION_USENARRATOR))
             _useNarrator = SKSE_HTTP.getBool(handle, mConsts.KEY_STARTCONVERSATION_USENARRATOR, false)
         endif
+        if(SKSE_HTTP.hasKey(handle, mConsts.KEY_QUESTCHECKS_LIST))
+            ; The quest check list was out of date, so the answers sent with the start were unusable
+            if repository.SetQuestCheckList(SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_QUESTCHECKS_LIST), mConsts)
+                _sendQuestChecksCatchUp = true
+                _actorsUpdated = true ; So MantellaSoftware can update what the NPCs know
+            endIf
+        endif
         ;Debug.Notification("Conversation started.")
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCTALK)
@@ -279,6 +288,11 @@ function RequestContinueConversation()
             ClearExtraRequestAction()
             ;Debug.Notification("_extraRequestActions got cleared. Remaining items: " + _extraRequestActions.Length)
         endif
+
+        if _sendQuestChecksCatchUp
+            AddQuestCheckResults(handle)
+            _sendQuestChecksCatchUp = false
+        endIf
 
         if _actorsUpdated
             SKSE_HTTP.setNestedDictionariesArray(handle, mConsts.KEY_ACTORS, _actorHandles)
@@ -459,6 +473,7 @@ Function CleanupConversation()
     _lastTopicInfo = 0
     _npcEventId = 0
     _hasNpcEventMonitorValues = false
+    _sendQuestChecksCatchUp = false
     ;SKSE_HTTP.clearAllDictionaries()
     If (MantellaConversationParticipantsQuest.IsRunning())
         MantellaConversationParticipantsQuest.Stop()
@@ -1038,7 +1053,18 @@ int function BuildContext(bool isConversationStart = false)
     _flushedEvents = past_events
     SKSE_HTTP.setStringArray(_contextHandle, mConsts.KEY_CONTEXT_INGAMEEVENTS, past_events)
     ClearIngameEvent()
+    AddQuestCheckResults(_contextHandle)
 endFunction
+
+; Adds the quest tag check plugin's answers, so MantellaSoftware can tell which quests moved on
+Function AddQuestCheckResults(int handleToAddTo)
+    if !repository.IsQuestChecksInstalled()
+        return
+    endIf
+    ; The version first: if a new list arrives in between, MantellaSoftware sees the old version and ignores these answers
+    SKSE_HTTP.setString(handleToAddTo, mConsts.KEY_QUESTCHECKS_VERSION, MantellaQuestChecks.GetListVersion())
+    SKSE_HTTP.setFloatArray(handleToAddTo, mConsts.KEY_QUESTCHECKS_RESULTS, MantellaQuestChecks.Evaluate())
+EndFunction
 
 int function AddCurrentWeather(int contextHandle)
     If (!PlayerRef.IsInInterior())

@@ -59,6 +59,16 @@ string property KEY_NPCEVENT_ADDFAILED_REFID = "mantella_npc_event_add_failed_re
 string property KEY_NPCEVENT_NEARBY_REFIDS = "mantella_npc_event_nearby_refids" auto
 string property KEY_NPCEVENT_PLAYERNOTICEABLE = "mantella_npc_event_player_noticeable" auto
 
+; Quest tags: the MantellaQuestChecks plugin answers the checks of the quest tag conditions
+string property KEY_REQUESTTYPE_QUESTCHECKLIST = "mantella_quest_check_list_request" auto
+string property KEY_REPLYTYPE_QUESTCHECKLIST = "mantella_quest_check_list_result" auto
+string property KEY_QUESTCHECKS_LIST = "mantella_quest_check_list" auto
+string property KEY_QUESTCHECKS_FUNCTIONS = "mantella_quest_check_functions" auto
+string property KEY_QUESTCHECKS_SUBJECTS = "mantella_quest_check_subjects" auto
+string property KEY_QUESTCHECKS_ARGUMENTS = "mantella_quest_check_arguments" auto
+string property KEY_QUESTCHECKS_VERSION = "mantella_quest_check_version" auto
+string property KEY_QUESTCHECKS_RESULTS = "mantella_quest_check_results" auto
+
 string property KEY_STARTCONVERSATION_WORLDID = "mantella_worldid" auto
 string property KEY_STARTCONVERSATION_USENARRATOR = "mantella_use_narrator" auto
 string property KEY_CONTINUECONVERSATION_TOPICINFOFILE = "mantella_topicinfofile" auto

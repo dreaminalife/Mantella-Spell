@@ -47,6 +47,16 @@ try {
     }
     Copy-Item "$Repo\LICENSE" "$Stage\$ModName - LICENSE.txt"
 
+    # The quest tag check plugin, built by the MantellaQuestChecks repository's GitHub Actions
+    $QuestChecksDll = Join-Path $Repo "SKSE\Plugins\MantellaQuestChecks.dll"
+    if (Test-Path $QuestChecksDll) {
+        New-Item -ItemType Directory -Force "$Stage\SKSE\Plugins" | Out-Null
+        Copy-Item $QuestChecksDll "$Stage\SKSE\Plugins\"
+    }
+    else {
+        Write-Warning "SKSE\Plugins\MantellaQuestChecks.dll not found. The zip won't include the quest tag check plugin."
+    }
+
     # Add entries one by one: CreateFromDirectory writes backslash paths under Windows PowerShell, which some mod managers mishandle
     Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::Open($Zip, [IO.Compression.ZipArchiveMode]::Create)

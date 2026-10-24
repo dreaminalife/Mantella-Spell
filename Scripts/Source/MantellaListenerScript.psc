@@ -67,6 +67,7 @@ Event OnPlayerLoadGame()
     ; EndIf
     repository.RegisterHotkeys()
     RegisterForModEvent("SKSE_HTTP_OnHttpReplyReceived", "OnHttpReplyReceived")
+    RequestQuestCheckList()
     RegisterForModEvent("Mantella_NpcInitiativeHotkey", "OnNpcInitiativeHotkey")
     RegisterForModEvent("Mantella_NpcEventHotkey", "OnNpcEventHotkey")
     RegisterForMenu("Loading Menu")
@@ -83,6 +84,17 @@ Event OnPlayerLoadGame()
     _lastRadiantAttemptTime = _lastInitiativeCheckTime
     RegisterForSingleUpdate(tickSeconds)
 EndEvent
+
+; Asks MantellaSoftware once for the quest tag checks. If it isn't running yet, the list comes with the first conversation's start reply instead
+Function RequestQuestCheckList()
+    if !repository.IsQuestChecksInstalled()
+        return
+    endIf
+    MantellaConstants consts = conversation.mConsts
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, consts.KEY_REQUESTTYPE, consts.KEY_REQUESTTYPE_QUESTCHECKLIST)
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
+EndFunction
 
 ; NPC Initiative, NPC Events and radiant conversations share the one conversation slot. Each has its own frequency, checked on a short tick.
 ; Only one of them starts per tick, and nothing starts while a check waits for the server
@@ -775,6 +787,9 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
         return
     elseIf replyType == consts.KEY_REPLYTYPE_NPCEVENT_ADDACTOR
         AddNpcEventActor(SKSE_HTTP.getInt(typedDictionaryHandle, consts.KEY_NPCEVENT_ADDACTOR_REFID, 0))
+        return
+    elseIf replyType == consts.KEY_REPLYTYPE_QUESTCHECKLIST
+        repository.SetQuestCheckList(SKSE_HTTP.getNestedDictionary(typedDictionaryHandle, consts.KEY_QUESTCHECKS_LIST), consts)
         return
     elseIf replyType != consts.KEY_REPLYTYPE_NPCINITIATIVE
         return

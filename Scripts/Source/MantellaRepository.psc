@@ -365,6 +365,23 @@ bool Function IsVanillaDialogueInstalled()
     return SKSE.GetPluginVersion("MantellaDialogue") >= 0
 EndFunction
 
+; True when the quest tag check plugin (MantellaQuestChecks.dll) is loaded
+bool Function IsQuestChecksInstalled()
+    return SKSE.GetPluginVersion("MantellaQuestChecks") >= 0
+EndFunction
+
+; Hands a check list from MantellaSoftware (a nested dictionary of the reply) to the quest tag check plugin
+bool Function SetQuestCheckList(int listHandle, MantellaConstants consts)
+    if !listHandle || !IsQuestChecksInstalled()
+        return false
+    endIf
+    string version = SKSE_HTTP.getString(listHandle, consts.KEY_QUESTCHECKS_VERSION, "")
+    string[] functions = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_FUNCTIONS)
+    string[] subjects = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_SUBJECTS)
+    string[] arguments = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_ARGUMENTS)
+    return MantellaQuestChecks.SetCheckList(version, functions, subjects, arguments)
+EndFunction
+
 bool function restartMantellaExe()
     ; restartMantellaExe = true
     ; RegisterForSingleUpdate(1)

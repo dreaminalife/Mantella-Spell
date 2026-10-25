@@ -377,9 +377,10 @@ bool Function SetQuestCheckList(int listHandle, MantellaConstants consts)
     endIf
     string version = SKSE_HTTP.getString(listHandle, consts.KEY_QUESTCHECKS_VERSION, "")
     string[] functions = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_FUNCTIONS)
-    string[] subjects = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_SUBJECTS)
-    string[] arguments = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_ARGUMENTS)
-    return MantellaQuestChecks.SetCheckList(version, functions, subjects, arguments)
+    string[] references = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_REFERENCES)
+    string[] params1 = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_PARAMS1)
+    string[] params2 = SKSE_HTTP.getStringArray(listHandle, consts.KEY_QUESTCHECKS_PARAMS2)
+    return MantellaQuestChecks.SetCheckList(version, functions, references, params1, params2)
 EndFunction
 
 bool function restartMantellaExe()

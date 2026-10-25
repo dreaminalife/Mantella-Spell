@@ -64,8 +64,9 @@ string property KEY_REQUESTTYPE_QUESTCHECKLIST = "mantella_quest_check_list_requ
 string property KEY_REPLYTYPE_QUESTCHECKLIST = "mantella_quest_check_list_result" auto
 string property KEY_QUESTCHECKS_LIST = "mantella_quest_check_list" auto
 string property KEY_QUESTCHECKS_FUNCTIONS = "mantella_quest_check_functions" auto
-string property KEY_QUESTCHECKS_SUBJECTS = "mantella_quest_check_subjects" auto
-string property KEY_QUESTCHECKS_ARGUMENTS = "mantella_quest_check_arguments" auto
+string property KEY_QUESTCHECKS_REFERENCES = "mantella_quest_check_references" auto
+string property KEY_QUESTCHECKS_PARAMS1 = "mantella_quest_check_params1" auto
+string property KEY_QUESTCHECKS_PARAMS2 = "mantella_quest_check_params2" auto
 string property KEY_QUESTCHECKS_VERSION = "mantella_quest_check_version" auto
 string property KEY_QUESTCHECKS_RESULTS = "mantella_quest_check_results" auto
 

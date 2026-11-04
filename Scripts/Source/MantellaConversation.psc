@@ -53,12 +53,19 @@ Actor[] _shoutNearby ; Who was last found nearby
 int[] _shoutNearbyRefids ; Start with a 0 and an empty name, so they are never empty and "nobody nearby" still reaches the server
 string[] _shoutNearbyNames
 string _shoutNearbyShown = "" ; The names last shown with Show Messages
-Form[] _shoutJoined ; The people who joined by shouting. They leave when the player switches back to Private
 Form[] _shoutSentActors ; The people nearby whose full actor settings were sent, so the server has their bios and memories
 int _shoutAddFailedRefid = 0
+string _shoutAddFailedReason = "" ; Why the person picked could not be added. Sent with the refid
 bool _isRoomStart = false ; The next conversation starts with only the player, who says something to the room (Just saying something)
 string _roomLine = "" ; What the player typed to say to the room. Sent as soon as the conversation is ready. Empty with a microphone
 bool _isRoomFirstTurn = false ; The room conversation is waiting for the player's first line, which the player already asked to say
+Actor[] _roomNearby ; Who MantellaShout.SayToRoom found nearby, so the start doesn't scan again
+int _roomScanId = 0 ; Counts the room scans asked for. Cancelling the text box, or a newer scan, changes it, so the older scan stops and its result is unused
+int _roomScanStartedId = 0 ; The last room scan that began running
+int _roomScanDoneId = 0 ; The last room scan that finished
+Actor[] _roomScanNearby ; What the last finished room scan found
+Form[] _prebuiltActors ; People nearby whose full actor settings the room scan built while the player typed
+int[] _prebuiltHandles ; Their actor settings, used by the start instead of building them again
 
 event OnInit()
     RegisterForConversationEvents()
@@ -75,6 +82,11 @@ Function RegisterForConversationEvents()
     RegisterForModEvent(EventInterface.EVENT_ACTIONS_PREFIX + mConsts.ACTION_ENDCONVERSATION,"OnEndConversationActionReceived")
     RegisterForModEvent(EventInterface.EVENT_ACTIONS_PREFIX + mConsts.ACTION_REMOVECHARACTER,"OnRemoveCharacterActionReceived")
     RegisterForModEvent(EventInterface.EVENT_ADD_EVENT,"OnAddEventReceived")
+    RegisterForModEvent(ROOM_SCAN_EVENT(),"OnRoomScan")
+EndFunction
+
+string Function ROOM_SCAN_EVENT() global
+    return "Mantella_RoomScan"
 EndFunction
 
 event OnUpdate()
@@ -99,10 +111,11 @@ Function SetGroupStart()
 EndFunction
 
 ; The next conversation starts with only the player, who says something to the room. Someone nearby may answer, or nobody does.
-; line is what the player typed, or empty when they speak with the microphone
-Function SetRoomStart(string line)
+; line is what the player typed, or empty when they speak with the microphone. nearby is who can hear it (MantellaShout.FindNearby)
+Function SetRoomStart(string line, Actor[] nearby)
     _isRoomStart = true
     _roomLine = line
+    _roomNearby = nearby
 EndFunction
 
 ; The next conversation acts out an NPC Event (see MantellaListenerScript). The id is sent with the start request
@@ -149,7 +162,12 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     _isRoomStart = false
     string roomLine = _roomLine
     _roomLine = ""
+    Actor[] roomNearby = _roomNearby
+    _roomNearby = None
     _isRoomFirstTurn = false
+    if !isRoomStart
+        ClearPrebuiltActors() ; Only a room start uses them
+    endIf
     _hasNpcEventMonitorValues = false
     _npcEventAddFailedRefid = 0
     _sendQuestChecksCatchUp = false
@@ -186,12 +204,12 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     if isRoomStart
         ; Starts already shouting, so MantellaSoftware starts it as a Shout conversation and its Game Master decides whether anyone answers
         _isShouting = true
-        _shoutJoined = Utility.CreateFormArray(0)
         _shoutSentActors = Utility.CreateFormArray(0)
-        RefreshShoutNearby()
-        AddShoutValues(handle)
+        SetShoutNearby(roomNearby) ; Found just before by MantellaShout.SayToRoom. Scanning again would delay the start
+        AddShoutValues(handle) ; Uses the actor settings the room scan built while the player typed
         _roomLine = roomLine
         _isRoomFirstTurn = true
+        ClearPrebuiltActors() ; Built while the player typed. Later requests build them fresh
     endIf
 
     if repository.microphoneEnabled
@@ -519,33 +537,107 @@ bool Function IsShouting()
     return _isShouting
 EndFunction
 
-; On: anyone nearby can answer or join in. Off (Private): only the people the player added can speak, so the people who joined by shouting leave.
-; MantellaSoftware learns about it with the next request
+; Saying something to the room: finds who is nearby, and builds the full actor settings of the nearest (Most People Described), on another
+; thread, so it runs while the player types. Returns the scan's id, for FinishRoomScan or CancelRoomScan
+int Function StartRoomScan()
+    _roomScanId += 1
+    RegisterForModEvent(ROOM_SCAN_EVENT(), "OnRoomScan") ; Again here, in case this save never ran RegisterForConversationEvents with it
+    int eventHandle = ModEvent.Create(ROOM_SCAN_EVENT())
+    if eventHandle
+        ModEvent.PushInt(eventHandle, _roomScanId)
+        ModEvent.Send(eventHandle)
+    endIf
+    return _roomScanId
+EndFunction
+
+; The text box was cancelled, or the line can't be said. The scan stops at its next step, and what it found is unused
+Function CancelRoomScan(int scanId)
+    if scanId == _roomScanId
+        _roomScanId += 1
+    endIf
+EndFunction
+
+; Waits for the scan to finish. GetRoomScanResult then has who it found, and StartConversation uses the actor settings it built.
+; Returns false if a newer scan replaced it. If the scan never began (the event didn't arrive), it scans here instead
+bool Function FinishRoomScan(int scanId)
+    float waited = 0.0
+    while _roomScanDoneId != scanId && scanId == _roomScanId && (_roomScanStartedId == scanId || waited < 2.0)
+        Utility.WaitMenuMode(0.1) ; Also counts while a menu is still open
+        waited += 0.1
+    endWhile
+    if scanId != _roomScanId
+        return false
+    endIf
+    if _roomScanDoneId != scanId
+        _roomScanDoneId = scanId ; So the scan doesn't run if it begins after all
+        ClearPrebuiltActors()
+        _roomScanNearby = MantellaShout.FindNearby(repository, self)
+    endIf
+    return true
+EndFunction
+
+Actor[] Function GetRoomScanResult()
+    Actor[] nearby = _roomScanNearby
+    _roomScanNearby = None
+    return nearby
+EndFunction
+
+Event OnRoomScan(int scanId)
+    if scanId != _roomScanId || _roomScanDoneId == scanId
+        return
+    endIf
+    _roomScanStartedId = scanId
+    Actor[] nearby = MantellaShout.FindNearby(repository, self)
+    int described = repository.shoutMaxCandidates
+    if described > nearby.Length
+        described = nearby.Length
+    endIf
+    if described < 0
+        described = 0
+    endIf
+    Form[] built = Utility.CreateFormArray(described)
+    int[] handles = Utility.CreateIntArray(described)
+    int i = 0
+    while i < described
+        if scanId != _roomScanId
+            return ; Cancelled while scanning
+        endIf
+        built[i] = nearby[i] as Form
+        handles[i] = buildActorSetting(nearby[i])
+        i += 1
+    endWhile
+    if scanId != _roomScanId || _roomScanDoneId == scanId ; Cancelled, or FinishRoomScan gave up waiting and scanned itself
+        return
+    endIf
+    _prebuiltActors = built
+    _prebuiltHandles = handles
+    _roomScanNearby = nearby
+    _roomScanDoneId = scanId
+EndEvent
+
+Function ClearPrebuiltActors()
+    _prebuiltActors = None
+    _prebuiltHandles = None
+EndFunction
+
+; On: anyone nearby can answer or join in. Off (Private): nobody new joins. Everyone already in the conversation stays, the people who joined by
+; shouting too. MantellaSoftware learns about it with the next request
 Function SetShout(bool isOn)
     if isOn == _isShouting || !IsRunning()
         return
     endIf
     if isOn
         _isShouting = true
-        _shoutJoined = Utility.CreateFormArray(0)
         _shoutSentActors = Utility.CreateFormArray(0)
         RefreshShoutNearby()
         Debug.Notification("Shouting: anyone nearby can answer or join in")
         return
     endIf
-    Form[] joined = _shoutJoined
     ClearShout()
-    Debug.Notification("Private: only the people you added can speak")
-    if joined && joined.Length > 0
-        Actor[] leaving = PapyrusUtil.ActorArray(joined.Length)
-        int i = 0
-        while i < joined.Length
-            leaving[i] = joined[i] as Actor
-            i += 1
-        endWhile
-        RemoveActors(leaving) ; Ends the conversation if fewer than 2 people are left
-    elseIf Participants.GetSize() < 2
+    if Participants.GetSize() < 2
         EndConversation() ; The player said something to the room and nobody has joined yet
+    else
+        Debug.Notification("Private: nobody new joins")
     endIf
 EndFunction
 
@@ -555,9 +647,9 @@ Function ClearShout()
     _shoutNearbyRefids = None
     _shoutNearbyNames = None
     _shoutNearbyShown = ""
-    _shoutJoined = None
     _shoutSentActors = None
     _shoutAddFailedRefid = 0
+    _shoutAddFailedReason = ""
 EndFunction
 
 ; Finds who is nearby now. Called when Shout is switched on and on every tick of MantellaListenerScript, so requests only attach the last list
@@ -565,7 +657,14 @@ Function RefreshShoutNearby()
     if !_isShouting
         return
     endIf
-    Actor[] nearby = MantellaShout.FindNearby(repository, self)
+    SetShoutNearby(MantellaShout.FindNearby(repository, self))
+EndFunction
+
+; Keeps who is nearby, so requests attach it. Slow to work out: each check on a person in Papyrus waits for a frame
+Function SetShoutNearby(Actor[] nearby)
+    if !nearby
+        nearby = PapyrusUtil.ActorArray(0)
+    endIf
     int[] refids = Utility.CreateIntArray(nearby.Length + 1)
     string[] names = Utility.CreateStringArray(nearby.Length + 1)
     string shown = ""
@@ -619,7 +718,9 @@ Function AddShoutValues(int handle)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_NEWCOMERSREMEMBER, repository.shoutNewcomersRemember)
     if _shoutAddFailedRefid != 0
         SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_ADDFAILED_REFID, _shoutAddFailedRefid)
+        SKSE_HTTP.setString(handle, mConsts.KEY_SHOUT_ADDFAILED_REASON, _shoutAddFailedReason)
         _shoutAddFailedRefid = 0
+        _shoutAddFailedReason = ""
     endIf
 EndFunction
 
@@ -645,7 +746,15 @@ Function AddNewShoutActors(int handle, Actor[] nearby)
     while i < described
         Actor npc = nearby[i]
         if npc && _shoutSentActors.Find(npc) < 0
-            handles[count] = buildActorSetting(npc)
+            int prebuilt = -1
+            if _prebuiltActors
+                prebuilt = _prebuiltActors.Find(npc)
+            endIf
+            if prebuilt >= 0
+                handles[count] = _prebuiltHandles[prebuilt] ; Built by the room scan while the player typed
+            else
+                handles[count] = buildActorSetting(npc)
+            endIf
             count += 1
             _shoutSentActors = Utility.ResizeFormArray(_shoutSentActors, _shoutSentActors.Length + 1)
             _shoutSentActors[_shoutSentActors.Length - 1] = npc
@@ -667,9 +776,15 @@ Function AddShoutActor(int refid)
         endIf
         i += 1
     endWhile
-    if _isShouting && npc && MantellaShout.CanJoin(npc, repository, self)
-        _shoutJoined = Utility.ResizeFormArray(_shoutJoined, _shoutJoined.Length + 1)
-        _shoutJoined[_shoutJoined.Length - 1] = npc
+    string reason = ""
+    if !_isShouting
+        reason = "Shout is off"
+    elseIf !npc
+        reason = "no longer in the nearby list"
+    else
+        reason = MantellaShout.WhyCantJoin(npc, repository, self)
+    endIf
+    if reason == ""
         if repository.showShoutMessages
             Debug.Notification("Shout: " + npc.GetDisplayName() + " joins the conversation")
         endIf
@@ -678,8 +793,13 @@ Function AddShoutActor(int refid)
         AddActors(actors)
     else
         _shoutAddFailedRefid = refid
+        _shoutAddFailedReason = reason
         if repository.showShoutMessages
-            Debug.Notification("Shout: the person picked can no longer join")
+            if npc
+                Debug.Notification("Shout: " + npc.GetDisplayName() + " can't join: " + reason)
+            else
+                Debug.Notification("Shout: the person picked can't join: " + reason)
+            endIf
         endIf
     endIf
     RequestContinueConversation()
@@ -716,6 +836,7 @@ Function CleanupConversation()
     _sendQuestChecksCatchUp = false
     _isRoomFirstTurn = false
     _roomLine = ""
+    ClearPrebuiltActors()
     ClearShout()
     ;SKSE_HTTP.clearAllDictionaries()
     If (MantellaConversationParticipantsQuest.IsRunning())

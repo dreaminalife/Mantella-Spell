@@ -33,7 +33,7 @@ EndFunction
 int Function ACTION_SHOUT() global ; Anyone nearby can answer or join in. See MantellaShout
     return 10
 EndFunction
-int Function ACTION_PRIVATE() global ; Back to only the people the player added. Those who joined by shouting leave
+int Function ACTION_PRIVATE() global ; Shout off: nobody new joins. Everyone already in the conversation stays
     return 11
 EndFunction
 int Function ACTION_SAY_TO_ROOM() global ; Just saying something: said to whoever is around. See MantellaShout.SayToRoom
@@ -111,7 +111,7 @@ Function Open(MantellaRepository repository) global
             count = AddOption(wheel, actions, count, "Companions", "Bring my companions in", ACTION_ADD_COMPANIONS())
             if !conversation.IsNpcEvent() ; NPC Events keep their own rules for drawing people in
                 if conversation.IsShouting()
-                    count = AddOption(wheel, actions, count, "Private", "Only the people I added can speak", ACTION_PRIVATE())
+                    count = AddOption(wheel, actions, count, "Private", "Nobody new joins", ACTION_PRIVATE())
                 else
                     count = AddOption(wheel, actions, count, "Shout", "Anyone nearby can answer or join in", ACTION_SHOUT())
                 endIf

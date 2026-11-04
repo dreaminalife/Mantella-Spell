@@ -69,6 +69,7 @@ string property KEY_SHOUT_MAXPEOPLE = "mantella_shout_max_people" auto
 string property KEY_SHOUT_MAXDESCRIBED = "mantella_shout_max_described" auto ; How many of the nearest people the Game Master gets the bios and memories of
 string property KEY_SHOUT_NEWCOMERSREMEMBER = "mantella_shout_newcomers_remember" auto ; What someone who joins by shouting heard before: 0 since shouting, 1 your last line, 2 everything
 string property KEY_SHOUT_ADDFAILED_REFID = "mantella_shout_add_failed_refid" auto
+string property KEY_SHOUT_ADDFAILED_REASON = "mantella_shout_add_failed_reason" auto ; Why they could not be added, for the log
 string property KEY_REPLYTYPE_SHOUT_ADDACTOR = "mantella_shout_add_actor" auto
 string property KEY_SHOUT_ADDACTOR_REFID = "mantella_shout_add_actor_refid" auto
 string property KEY_SHOUT_UNAVAILABLE = "mantella_shout_unavailable" auto

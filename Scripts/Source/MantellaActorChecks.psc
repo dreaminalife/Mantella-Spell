@@ -3,18 +3,38 @@ Scriptname MantellaActorChecks Hidden
 
 ; Alive, awake, not hostile, not busy in a scene and free to talk
 bool Function IsAvailableNpc(Actor npc) global
+    return UnavailableReason(npc) == ""
+EndFunction
+
+; Why the NPC can't talk right now, or "" if they are free to. The same checks as IsAvailableNpc, stopping at the first that fails
+string Function UnavailableReason(Actor npc) global
     Actor player = Game.GetPlayer()
-    if !npc || npc == player || npc.IsDisabled() || npc.IsDead() || npc.IsUnconscious() || npc.IsBleedingOut()
-        return false
-    endIf
-    if npc.IsHostileToActor(player) || npc.IsInCombat()
-        return false
+    if !npc
+        return "gone"
+    elseIf npc == player
+        return "is the player"
+    elseIf npc.IsDisabled()
+        return "disabled"
+    elseIf npc.IsDead()
+        return "dead"
+    elseIf npc.IsUnconscious()
+        return "unconscious"
+    elseIf npc.IsBleedingOut()
+        return "bleeding out"
+    elseIf npc.IsHostileToActor(player)
+        return "hostile to the player"
+    elseIf npc.IsInCombat()
+        return "in combat"
     endIf
     ; In a scene, e.g. a bard performing a song: their Mantella lines wait behind the scene's, so the conversation stalls
     if npc.GetCurrentScene()
-        return false
+        return "in a scene"
+    elseIf npc.GetSleepState() == 3 ; 3 is asleep
+        return "asleep"
+    elseIf npc.IsInDialogueWithPlayer()
+        return "in game dialogue with the player"
     endIf
-    return npc.GetSleepState() != 3 && !npc.IsInDialogueWithPlayer() ; 3 is asleep
+    return ""
 EndFunction
 
 ; Following the player right now: a vanilla-style follower who is not told to wait, or one recruited with Mantella's follow action.

@@ -26,7 +26,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_npcInitiativeMaxCandidates = mcm.AddSliderOption("Max NPCs per Check", repository.npcInitiativeMaxCandidates)
 
     mcm.AddHeaderOption("Hotkey")
-    mcm.oid_keymapNpcInitiativeHotkey = mcm.AddKeyMapOption("Check Now", repository.MantellaNpcInitiativeHotkey)
+    mcm.oid_keymapNpcInitiativeHotkey = mcm.AddKeyMapOption("Check Now", repository.MantellaNpcInitiativeHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
     mcm.oid_npcInitiativeHotkeySkipsThreshold = mcm.AddToggleOption("Skip Threshold", repository.npcInitiativeHotkeySkipsThreshold)
 endfunction
 

@@ -16,6 +16,7 @@ int property oid_keymapRadiantHotkey auto
 int property oid_keymapInterruptHotkey auto
 int property oid_keymapNpcInitiativeHotkey auto
 int property oid_keymapNpcEventHotkey auto
+int property oid_keymapWheelHotkey auto
 
 int property oid_showDialogueItems auto
 
@@ -44,6 +45,14 @@ int property oid_npcEventRequireLineOfSight auto
 int property oid_npcEventIncludeFollowers auto
 int property oid_npcEventMaxCandidates auto
 int property oid_showNpcEventMessages auto
+
+int property oid_shoutLinesBetweenJoins auto
+int property oid_shoutMaxPeople auto
+int property oid_showShoutMessages auto
+int property oid_shoutHearingDistance auto
+int property oid_shoutMaxCandidates auto
+int property oid_shoutMaxListed auto
+int property oid_shoutRequireLineOfSight auto
 
 
 int property oid_playerCharacterDescription1 auto
@@ -128,6 +137,7 @@ string property PAGE_EQUIPMENT = "Equipment" auto
 string property PAGE_ADVANCED = "Advanced" auto
 string property PAGE_NPCINITIATIVE = "NPC Initiative" auto
 string property PAGE_NPCEVENTS = "NPC Events" auto
+string property PAGE_SHOUT = "Shout Mode" auto
 
 
 
@@ -139,7 +149,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 13
+    Return 16
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -148,9 +158,14 @@ event OnVersionUpdate(int a_version)
 EndEvent
 
 Event OnConfigOpen()
-    ; SkyUI's version update does not run on every save, so what versions 10, 12 and 13 added is also checked whenever the menu opens
-    if Pages.Length < 8
+    ; SkyUI's version update does not run on every save, so what versions 10, 12, 13, 15 and 16 added is also checked whenever the menu opens
+    if Pages.Length < 9
         OnConfigInit()
+    endIf
+    if repository.shoutHearingDistance == 0 ; Never 0 once set: its slider starts at 5
+        repository.assignDefaultSettings(14) ; Only assigns the defaults added in version 15 and later
+    elseIf repository.shoutMaxListed == 0 ; Never 0 once set: its slider starts at 1
+        repository.assignDefaultSettings(15) ; Only assigns the defaults added in version 16
     endIf
     if repository.npcInitiativeMaxCandidates == 0 ; Never 0 once set: its slider starts at 1
         repository.assignDefaultSettings(9) ; Only assigns the defaults added in version 10 and later
@@ -164,7 +179,7 @@ EndEvent
 Event OnConfigInit()
 	;this part right here name all the pages we'll need (we can add more pages at the end as long as we update the numbers) and declares some variables
     ModName = "Mantella"
-	Pages = new string[8]
+	Pages = new string[9]
     Pages[0] = PAGE_GENERAL
     Pages[1] = PAGE_PLAYER
 	Pages[2] = PAGE_PLAYERTRACKING
@@ -173,6 +188,7 @@ Event OnConfigInit()
  	Pages[5] = PAGE_ADVANCED
  	Pages[6] = PAGE_NPCINITIATIVE
  	Pages[7] = PAGE_NPCEVENTS
+ 	Pages[8] = PAGE_SHOUT
  
     playerAllToggle=true
     playerEquipmentAllToggle=true
@@ -212,6 +228,9 @@ Event OnPageReset(string page)
 	elseif page==PAGE_NPCEVENTS
 		MantellaMCM_NPCEventSettings.Render(self, repository)
 		MantellaMCMcurrentPage=PAGE_NPCEVENTS
+	elseif page==PAGE_SHOUT
+		MantellaMCM_ShoutSettings.Render(self, repository)
+		MantellaMCMcurrentPage=PAGE_SHOUT
  	endif
 EndEvent
 
@@ -233,6 +252,8 @@ Event OnOptionSelect(int optionID)
 		MantellaMCM_NPCInitiativeSettings.OptionUpdate(self,optionID, repository)
 	elseif MantellaMCMcurrentPage ==PAGE_NPCEVENTS
 		MantellaMCM_NPCEventSettings.OptionUpdate(self,optionID, repository)
+	elseif MantellaMCMcurrentPage ==PAGE_SHOUT
+		MantellaMCM_ShoutSettings.OptionUpdate(self,optionID, repository)
 	endif
 EndEvent 
 
@@ -249,6 +270,8 @@ Event OnOptionSliderOpen(Int optionId)
         MantellaMCM_NPCInitiativeSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCEVENTS
         MantellaMCM_NPCEventSettings.SliderOptionOpen(self,optionID, repository)
+    elseif MantellaMCMcurrentPage == PAGE_SHOUT
+        MantellaMCM_ShoutSettings.SliderOptionOpen(self,optionID, repository)
     endIf
 EndEvent
 
@@ -265,6 +288,8 @@ Event OnOptionSliderAccept(Int optionId, Float value)
         MantellaMCM_NPCInitiativeSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCEVENTS
         MantellaMCM_NPCEventSettings.SliderOptionAccept(self,optionID, value, repository)
+    elseif MantellaMCMcurrentPage == PAGE_SHOUT
+        MantellaMCM_ShoutSettings.SliderOptionAccept(self,optionID, value, repository)
     endIf
 EndEvent
 
@@ -305,6 +330,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Toggle radiant conversations.")
 	elseIf optionID == oid_keymapInterruptHotkey
 		SetInfoText("Stops the NPCs mid-response and gives you the turn. Then reply with the Open Text Prompt hotkey or the mic.")
+	elseIf optionID == oid_keymapWheelHotkey
+		SetInfoText("Opens a wheel with the options that make sense right now: talk to your companions or the person you're looking at, interrupt, start an NPC Event, end the conversation. Companions are your followers plus anyone you add from the wheel.")
 
     elseIf optionID == oid_showDialogueItems	
 		SetInfoText("Show the dialogue tree entries to start a conversation or add and remove NPCs from it.")
@@ -361,6 +388,21 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Enable NPC Event debugging messages.")
 	elseIf optionID == oid_keymapNpcEventHotkey
 		SetInfoText("Attempts a scene right away. Works even when NPC Events are turned off, and ignores Frequency.")
+
+	elseIf optionID == oid_shoutLinesBetweenJoins
+		SetInfoText("After someone joins by shouting, how many lines must be spoken before the next person can join. \nDefault: 3")
+	elseIf optionID == oid_shoutMaxPeople
+		SetInfoText("Nobody new joins by shouting once the conversation has this many people, you included. \nDefault: 6")
+	elseIf optionID == oid_showShoutMessages
+		SetInfoText("Short notes on screen about who is nearby and who joins, to see what's going on.")
+	elseIf optionID == oid_shoutHearingDistance
+		SetInfoText("How far from you (in meters) people can be and still hear you. \nDefault: 20")
+	elseIf optionID == oid_shoutMaxCandidates
+		SetInfoText("How many of the nearest people the Game Master knows in full: their bio and memories, to pick the right person to answer. The others nearby it only knows by name. \nDefault: 6")
+	elseIf optionID == oid_shoutMaxListed
+		SetInfoText("How many of the nearest people the Game Master can pick from, by name. Call someone by name and they can answer, even from across the room. \nDefault: 30")
+	elseIf optionID == oid_shoutRequireLineOfSight
+		SetInfoText("Off: everyone within Hearing Distance can join. On: they also need to be in sight. Either you can see them or they can see you. \nDefault: Off")
 
     elseIf optionID == oid_playerCharacterDescription1	
 		SetInfoText("The description of the player used in the prompt for the LLM. This is not a bio of the player. \nTry to only put things here that are obvious about your character when the NPC meets them. e.g.'A tall and broad Nord man with long red hair''")

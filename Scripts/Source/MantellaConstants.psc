@@ -59,6 +59,19 @@ string property KEY_NPCEVENT_ADDFAILED_REFID = "mantella_npc_event_add_failed_re
 string property KEY_NPCEVENT_NEARBY_REFIDS = "mantella_npc_event_nearby_refids" auto
 string property KEY_NPCEVENT_PLAYERNOTICEABLE = "mantella_npc_event_player_noticeable" auto
 
+; Shout: sent with every continue and player input request. The rest only while the player shouts
+string property KEY_SHOUT_ENABLED = "mantella_shout_enabled" auto
+string property KEY_SHOUT_NEARBY_REFIDS = "mantella_shout_nearby_refids" auto
+string property KEY_SHOUT_NEARBY_NAMES = "mantella_shout_nearby_names" auto
+string property KEY_SHOUT_NEARBY_ACTORS = "mantella_shout_nearby_actors" auto ; Full actor settings, sent once for each person new to the list
+string property KEY_SHOUT_LINESBETWEENJOINS = "mantella_shout_lines_between_joins" auto
+string property KEY_SHOUT_MAXPEOPLE = "mantella_shout_max_people" auto
+string property KEY_SHOUT_MAXDESCRIBED = "mantella_shout_max_described" auto ; How many of the nearest people the Game Master gets the bios and memories of
+string property KEY_SHOUT_ADDFAILED_REFID = "mantella_shout_add_failed_refid" auto
+string property KEY_REPLYTYPE_SHOUT_ADDACTOR = "mantella_shout_add_actor" auto
+string property KEY_SHOUT_ADDACTOR_REFID = "mantella_shout_add_actor_refid" auto
+string property KEY_SHOUT_UNAVAILABLE = "mantella_shout_unavailable" auto
+
 ; Quest tags: the MantellaQuestChecks plugin answers the checks of the quest tag conditions
 string property KEY_REQUESTTYPE_QUESTCHECKLIST = "mantella_quest_check_list_request" auto
 string property KEY_REPLYTYPE_QUESTCHECKLIST = "mantella_quest_check_list_result" auto

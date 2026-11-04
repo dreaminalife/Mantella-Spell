@@ -109,6 +109,8 @@ event OnUpdate()
         endIf
         if conversation.IsNpcEvent() && !conversation.IsEnding() ; Saving the memories can take longer than a tick
             MonitorNpcEvent()
+        elseIf conversation.IsShouting() && !conversation.IsEnding()
+            conversation.RefreshShoutNearby() ; Who can hear the player now
         endIf
     elseIf IsCheckPending(now)
         ; The check's result may start a conversation
@@ -444,15 +446,9 @@ bool Function IsCheckPending(float now)
     return (_initiativePending && now - _initiativeSentTime < initiativePendingTimeout) || (_eventPending && now - _eventSentTime < eventPendingTimeout)
 EndFunction
 
-; Alive, awake, not hostile and free to talk. Used by NPC Initiative and NPC Events
+; Alive, awake, not hostile, not busy in a scene and free to talk. Used by NPC Initiative and NPC Events
 bool Function IsAvailableNpc(Actor npc)
-    if !npc || npc == PlayerRef || npc.IsDisabled() || npc.IsDead() || npc.IsUnconscious() || npc.IsBleedingOut()
-        return false
-    endIf
-    if npc.IsHostileToActor(PlayerRef) || npc.IsInCombat()
-        return false
-    endIf
-    return npc.GetSleepState() != 3 && !npc.IsInDialogueWithPlayer() ; 3 is asleep
+    return MantellaActorChecks.IsAvailableNpc(npc)
 EndFunction
 
 bool Function IsInitiativeCandidate(Actor npc)
@@ -470,10 +466,7 @@ EndFunction
 ; Following the player right now: a vanilla-style follower who is not told to wait, or one recruited with Mantella's follow action.
 ; Waiting, dismissed and potential followers are not active followers
 bool Function IsActiveFollower(Actor npc)
-    if npc.IsPlayerTeammate() && npc.GetActorValue("WaitingForPlayer") == 0
-        return true
-    endIf
-    return npc.GetFactionRank(repository.giafac_Following) >= 1 ; Mantella's follow action sets rank 1, ending it sets -2
+    return MantellaActorChecks.IsActiveFollower(npc, repository)
 EndFunction
 
 ; Keeps the nearest candidates in _initiativeCandidates: the nearest active followers, up to their own cap so a big

@@ -47,6 +47,15 @@ bool _npcEventPlayerNoticeable = false
 bool _hasNpcEventMonitorValues = false ; Set once MantellaListenerScript has checked the scene
 int _npcEventAddFailedRefid = 0
 bool _sendQuestChecksCatchUp = false ; Set when the start reply brought a new quest check list: fresh answers go with the next continue request
+bool _isGroupStart = false ; The next conversation may start with more than one NPC (Talk to my companions in the Conversation Wheel)
+bool _isShouting = false ; Shout (Conversation Wheel): anyone nearby can answer or join in. See MantellaShout
+Actor[] _shoutNearby ; Who was last found nearby
+int[] _shoutNearbyRefids ; Start with a 0 and an empty name, so they are never empty and "nobody nearby" still reaches the server
+string[] _shoutNearbyNames
+string _shoutNearbyShown = "" ; The names last shown with Show Messages
+Form[] _shoutJoined ; The people who joined by shouting. They leave when the player switches back to Private
+Form[] _shoutSentActors ; The people nearby whose full actor settings were sent, so the server has their bios and memories
+int _shoutAddFailedRefid = 0
 
 event OnInit()
     RegisterForConversationEvents()
@@ -79,6 +88,11 @@ endEvent
 ; The next conversation is started by the NPC walking up to the player (NPC Initiative)
 Function SetNpcInitiative()
     _npcInitiative = true
+EndFunction
+
+; The next conversation may start with more than one NPC
+Function SetGroupStart()
+    _isGroupStart = true
 EndFunction
 
 ; The next conversation acts out an NPC Event (see MantellaListenerScript). The id is sent with the start request
@@ -119,10 +133,13 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     ; Cleared right away, so an early return can't leave it set for the next conversation
     bool isNpcInitiative = _npcInitiative
     _npcInitiative = false
+    bool isGroupStart = _isGroupStart
+    _isGroupStart = false
     _hasNpcEventMonitorValues = false
     _npcEventAddFailedRefid = 0
     _sendQuestChecksCatchUp = false
-    if(actorsToStartConversationWith.Length > 2 && !IsNpcEvent()) ; An NPC Event can start with more people
+    ClearShout()
+    if(actorsToStartConversationWith.Length > 2 && !IsNpcEvent() && !isGroupStart) ; An NPC Event or a group start can start with more people
         Debug.Notification("Cannot start conversation. Conversation is already running.")
         return
     endIf
@@ -233,6 +250,10 @@ endEvent
 
 function ContinueConversation(string nextAction, int handle)
     ; Debug.Notification(nextAction)
+    if _isShouting && SKSE_HTTP.getBool(handle, mConsts.KEY_SHOUT_UNAVAILABLE, false)
+        ClearShout()
+        Debug.Notification("Shout needs the Game Master model. Set it up in Mantella's settings")
+    endIf
     if(nextAction == mConsts.KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED)
         _hasBeenStopped = false
         if(SKSE_HTTP.hasKey(handle,mConsts.KEY_STARTCONVERSATION_USENARRATOR))
@@ -268,6 +289,8 @@ function ContinueConversation(string nextAction, int handle)
         int npcActionHandle = SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_REPLYTYPE_NPCACTION)
         ProcessNpcSpeak(npcActionHandle)
         RequestContinueConversation()
+    elseIf(nextAction == mConsts.KEY_REPLYTYPE_SHOUT_ADDACTOR)
+        AddShoutActor(SKSE_HTTP.getInt(handle, mConsts.KEY_SHOUT_ADDACTOR_REFID, 0))
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_ENDCONVERSATION)
         CleanupConversation()
     endIf
@@ -309,6 +332,8 @@ function RequestContinueConversation()
                 _npcEventAddFailedRefid = 0
             endIf
         endIf
+
+        AddShoutValues(handle)
 
         if repository.microphoneEnabled != microphoneEnabledLastKnownStatus
             if repository.microphoneEnabled
@@ -446,6 +471,179 @@ Actor function GetActorInConversation(string actorName)
 endFunction
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;            Shout            ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Switched on and off from the Conversation Wheel. While the player shouts, the server's Game Master may pick someone nearby,
+; who is added here and then speaks. See MantellaShout and docs/conversation_wheel.md in the Mantella repository
+
+bool Function IsShouting()
+    return _isShouting
+EndFunction
+
+; On: anyone nearby can answer or join in. Off (Private): only the people the player added can speak, so the people who joined by shouting leave.
+; MantellaSoftware learns about it with the next request
+Function SetShout(bool isOn)
+    if isOn == _isShouting || !IsRunning()
+        return
+    endIf
+    if isOn
+        _isShouting = true
+        _shoutJoined = Utility.CreateFormArray(0)
+        _shoutSentActors = Utility.CreateFormArray(0)
+        RefreshShoutNearby()
+        Debug.Notification("Shouting: anyone nearby can answer or join in")
+        return
+    endIf
+    Form[] joined = _shoutJoined
+    ClearShout()
+    Debug.Notification("Private: only the people you added can speak")
+    if joined && joined.Length > 0
+        Actor[] leaving = PapyrusUtil.ActorArray(joined.Length)
+        int i = 0
+        while i < joined.Length
+            leaving[i] = joined[i] as Actor
+            i += 1
+        endWhile
+        RemoveActors(leaving) ; Ends the conversation if fewer than 2 people are left
+    endIf
+EndFunction
+
+Function ClearShout()
+    _isShouting = false
+    _shoutNearby = None
+    _shoutNearbyRefids = None
+    _shoutNearbyNames = None
+    _shoutNearbyShown = ""
+    _shoutJoined = None
+    _shoutSentActors = None
+    _shoutAddFailedRefid = 0
+EndFunction
+
+; Finds who is nearby now. Called when Shout is switched on and on every tick of MantellaListenerScript, so requests only attach the last list
+Function RefreshShoutNearby()
+    if !_isShouting
+        return
+    endIf
+    Actor[] nearby = MantellaShout.FindNearby(repository, self)
+    int[] refids = Utility.CreateIntArray(nearby.Length + 1)
+    string[] names = Utility.CreateStringArray(nearby.Length + 1)
+    string shown = ""
+    int i = 0
+    while i < nearby.Length
+        refids[i + 1] = (nearby[i] as Form).GetFormID()
+        names[i + 1] = nearby[i].GetDisplayName()
+        if i < 5 ; The rest are counted, so a crowded room still fits in a note
+            if i > 0
+                shown += ", "
+            endIf
+            shown += names[i + 1]
+        endIf
+        i += 1
+    endWhile
+    if nearby.Length > 5
+        shown += " and " + (nearby.Length - 5) + " more"
+    endIf
+    _shoutNearby = nearby
+    _shoutNearbyRefids = refids
+    _shoutNearbyNames = names
+    if repository.showShoutMessages && shown != _shoutNearbyShown
+        if shown == ""
+            Debug.Notification("Shout: nobody nearby")
+        else
+            Debug.Notification("Shout: nearby: " + shown)
+        endIf
+    endIf
+    _shoutNearbyShown = shown
+EndFunction
+
+; Sent with every continue and player input request
+Function AddShoutValues(int handle)
+    SKSE_HTTP.setBool(handle, mConsts.KEY_SHOUT_ENABLED, _isShouting)
+    if !_isShouting
+        return
+    endIf
+    if !_shoutNearbyRefids
+        RefreshShoutNearby()
+    endIf
+    ; Both taken before any call, so a refresh in between can't pair the names of one scan with the refids of another
+    int[] refids = _shoutNearbyRefids
+    string[] names = _shoutNearbyNames
+    Actor[] nearby = _shoutNearby
+    SKSE_HTTP.setIntArray(handle, mConsts.KEY_SHOUT_NEARBY_REFIDS, refids)
+    SKSE_HTTP.setStringArray(handle, mConsts.KEY_SHOUT_NEARBY_NAMES, names)
+    AddNewShoutActors(handle, nearby)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_LINESBETWEENJOINS, repository.shoutLinesBetweenJoins)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXPEOPLE, repository.shoutMaxPeople)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXDESCRIBED, repository.shoutMaxCandidates)
+    if _shoutAddFailedRefid != 0
+        SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_ADDFAILED_REFID, _shoutAddFailedRefid)
+        _shoutAddFailedRefid = 0
+    endIf
+EndFunction
+
+; The full actor settings of the nearest people (Most People Described) who were not sent yet. The server puts their bios and memories in the Game Master's prompt.
+; The others nearby are only sent by name
+Function AddNewShoutActors(int handle, Actor[] nearby)
+    if !nearby
+        return
+    endIf
+    int described = repository.shoutMaxCandidates
+    if described > nearby.Length
+        described = nearby.Length
+    endIf
+    if described <= 0
+        return
+    endIf
+    if !_shoutSentActors
+        _shoutSentActors = Utility.CreateFormArray(0)
+    endIf
+    int[] handles = Utility.CreateIntArray(described)
+    int count = 0
+    int i = 0
+    while i < described
+        Actor npc = nearby[i]
+        if npc && _shoutSentActors.Find(npc) < 0
+            handles[count] = buildActorSetting(npc)
+            count += 1
+            _shoutSentActors = Utility.ResizeFormArray(_shoutSentActors, _shoutSentActors.Length + 1)
+            _shoutSentActors[_shoutSentActors.Length - 1] = npc
+        endIf
+        i += 1
+    endWhile
+    if count > 0
+        SKSE_HTTP.setNestedDictionariesArray(handle, mConsts.KEY_SHOUT_NEARBY_ACTORS, Utility.ResizeIntArray(handles, count))
+    endIf
+EndFunction
+
+; The server's Game Master picked someone nearby. They join before they speak. If they no longer can, the server is told with the next request
+Function AddShoutActor(int refid)
+    Actor npc = None
+    int i = 0
+    while _shoutNearby && i < _shoutNearby.Length && !npc
+        if (_shoutNearby[i] as Form).GetFormID() == refid
+            npc = _shoutNearby[i]
+        endIf
+        i += 1
+    endWhile
+    if _isShouting && npc && MantellaShout.CanJoin(npc, repository, self)
+        _shoutJoined = Utility.ResizeFormArray(_shoutJoined, _shoutJoined.Length + 1)
+        _shoutJoined[_shoutJoined.Length - 1] = npc
+        if repository.showShoutMessages
+            Debug.Notification("Shout: " + npc.GetDisplayName() + " joins the conversation")
+        endIf
+        Actor[] actors = new Actor[1]
+        actors[0] = npc
+        AddActors(actors)
+    else
+        _shoutAddFailedRefid = refid
+        if repository.showShoutMessages
+            Debug.Notification("Shout: the person picked can no longer join")
+        endIf
+    endIf
+    RequestContinueConversation()
+EndFunction
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;       End conversation      ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -474,6 +672,7 @@ Function CleanupConversation()
     _npcEventId = 0
     _hasNpcEventMonitorValues = false
     _sendQuestChecksCatchUp = false
+    ClearShout()
     ;SKSE_HTTP.clearAllDictionaries()
     If (MantellaConversationParticipantsQuest.IsRunning())
         MantellaConversationParticipantsQuest.Stop()
@@ -518,6 +717,7 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
             BuildContext()
         endIf
         SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_CONTEXT, _contextHandle)
+        AddShoutValues(handle)
 
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
         _flushedEvents = None

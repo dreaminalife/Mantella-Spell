@@ -31,6 +31,7 @@ int property MantellaRadiantHotkey auto
 int property MantellaInterruptHotkey auto
 int property MantellaNpcInitiativeHotkey auto
 int property MantellaNpcEventHotkey auto
+int property MantellaWheelHotkey auto
 
 bool property showDialogueItems auto Conditional
 
@@ -59,6 +60,15 @@ bool property npcEventRequireLineOfSight auto
 bool property npcEventIncludeFollowers auto ; Off by default: a follower in a scene follows the player, so walking away would never end it
 int property npcEventMaxCandidates auto
 bool property showNpcEventMessages auto
+
+; Shout: switched on from the Conversation Wheel. See MantellaShout
+int property shoutLinesBetweenJoins auto
+int property shoutMaxPeople auto ; The player included
+bool property showShoutMessages auto
+float property shoutHearingDistance auto ; Meters
+int property shoutMaxCandidates auto ; Most People Described: the nearest people the Game Master gets the bios and memories of
+int property shoutMaxListed auto ; Most People Listed: the nearest people the Game Master may pick, by name
+bool property shoutRequireLineOfSight auto
 
 string property playerCharacterDescription1 auto
 string property playerCharacterDescription2 auto
@@ -129,6 +139,13 @@ bool property NPCdebugSelectModeEnabled auto
 ; bool restartMantellaExe = False
 int property HttpPort auto
 
+; The Conversation Wheel while it is open (see MantellaWheel)
+bool _isWheelOpen = false
+int _wheelPointedAt = 0 ; The place on the wheel pointed at now. It opens on place 0
+int _wheelChoice = -1 ; The place that was picked. -1 for none yet
+bool _wasWheelCancelled = false
+int property LEFT_MOUSE_BUTTON = 256 autoReadonly
+
 
 event OnInit()
     assignDefaultSettings(0, true)
@@ -146,6 +163,20 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 16 || isFirstInit)
+        shoutMaxListed = 30
+    EndIf
+    If (lastVersion < 15 || isFirstInit)
+        shoutLinesBetweenJoins = 3
+        shoutMaxPeople = 6
+        showShoutMessages = false
+        shoutHearingDistance = 20
+        shoutMaxCandidates = 6
+        shoutRequireLineOfSight = false
+    EndIf
+    If (lastVersion < 14 || isFirstInit)
+        MantellaWheelHotkey = -1
+    EndIf
     If (lastVersion < 13 || isFirstInit)
         eventRepeatCooldown = 10
     EndIf
@@ -285,56 +316,63 @@ function BindStartAddHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the start hotkey KeyMapChange
     UnregisterForKey(MantellaStartHotkey)
     MantellaStartHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 function BindPromptHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the prompt hotkey KeyMapChange
     UnregisterForKey(MantellaListenerTextHotkey)
     MantellaListenerTextHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 function BindEndHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the end hotkey KeyMapChange
     UnregisterForKey(MantellaEndHotkey)
     MantellaEndHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 function BindCustomGameEventHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the custom game event hotkey KeyMapChange
     UnregisterForKey(MantellaCustomGameEventHotkey)
     MantellaCustomGameEventHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 function BindRadiantHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the prompt hotkey KeyMapChange
     UnregisterForKey(MantellaRadiantHotkey)
     MantellaRadiantHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 function BindInterruptHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the interrupt hotkey KeyMapChange
     UnregisterForKey(MantellaInterruptHotkey)
     MantellaInterruptHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 function BindNpcInitiativeHotkey(int keyCode)
     ;used by the MCM_GeneralSettings KeyMapChange (from the NPC Initiative page) when updating the NPC Initiative hotkey
     UnregisterForKey(MantellaNpcInitiativeHotkey)
     MantellaNpcInitiativeHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 function BindNpcEventHotkey(int keyCode)
     ;used by the MCM_GeneralSettings KeyMapChange (from the NPC Events page) when updating the NPC Event hotkey
     UnregisterForKey(MantellaNpcEventHotkey)
     MantellaNpcEventHotkey=keyCode
-    RegisterForKey(keyCode)
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
+endfunction
+
+function BindWheelHotkey(int keyCode)
+    ;used by the MCM_GeneralSettings when updating the Conversation Wheel hotkey KeyMapChange
+    UnregisterForKey(MantellaWheelHotkey)
+    MantellaWheelHotkey=keyCode
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
 ; Called on every game load (from MantellaListenerScript). A key registration can get lost while the key stays set in the MCM,
@@ -348,6 +386,7 @@ function RegisterHotkeys()
     RegisterHotkey(MantellaInterruptHotkey)
     RegisterHotkey(MantellaNpcInitiativeHotkey)
     RegisterHotkey(MantellaNpcEventHotkey)
+    RegisterHotkey(MantellaWheelHotkey)
 endfunction
 
 function RegisterHotkey(int keyCode)
@@ -391,6 +430,111 @@ bool function restartMantellaExe()
     ;      or the VS debugger will crash (due to being called from the MCM thread?).
     ;      Check the corresponding commented out OnUpdate at the beginning of the script.
 EndFunction
+
+; The wheel shows while the hotkey is held. Point at an option and click (or press Activate) to pick it.
+; Letting go of the hotkey closes it, and nothing happens unless an option was picked
+Function OpenWheel()
+    if _isWheelOpen
+        return
+    endIf
+    _isWheelOpen = true
+    _wheelPointedAt = 0
+    _wheelChoice = -1
+    _wasWheelCancelled = false
+    ; Left registered after the wheel closes: unregistering here could stop the next wheel, which may already be open by then.
+    ; Every handler checks _isWheelOpen
+    RegisterForModEvent("UIWheelMenu_SetOption", "OnWheelPointedAt")
+    RegisterForModEvent("UIWheelMenu_ChooseOption", "OnWheelChoice")
+    RegisterForModEvent("UIWheelMenu_CloseMenu", "OnWheelClosed")
+    RegisterForModEvent("UIWheelMenu_LoadMenu", "OnWheelShown")
+    RegisterForKey(LEFT_MOUSE_BUTTON) ; The wheel itself only picks with Activate (E / Enter), not with a click
+    MantellaWheel.Open(self) ; Calls WheelFinished. Not called again here: by then the next wheel may be open
+EndFunction
+
+; Called by MantellaWheel as soon as the wheel has closed, before the chosen option runs. Some options take a few seconds
+; (starting a conversation), and the wheel can open again right away instead of after them
+Function WheelFinished()
+    if !_isWheelOpen
+        return
+    endIf
+    if !IsMantellaHotkey(LEFT_MOUSE_BUTTON)
+        UnregisterForKey(LEFT_MOUSE_BUTTON)
+    endIf
+    _isWheelOpen = false
+EndFunction
+
+bool Function IsMantellaHotkey(int keyCode)
+    return keyCode == MantellaStartHotkey || keyCode == MantellaListenerTextHotkey || keyCode == MantellaEndHotkey || keyCode == MantellaCustomGameEventHotkey || keyCode == MantellaRadiantHotkey || keyCode == MantellaInterruptHotkey || keyCode == MantellaNpcInitiativeHotkey || keyCode == MantellaNpcEventHotkey || keyCode == MantellaWheelHotkey
+EndFunction
+
+; The hotkey may have been let go before the wheel was on screen, when OnKeyUp could not close it yet
+Event OnWheelShown(string eventName, string strArg, float numArg, Form sender)
+    if _isWheelOpen && _wheelChoice < 0 && !Input.IsKeyPressed(MantellaWheelHotkey)
+        CloseWheel()
+    endIf
+EndEvent
+
+Event OnWheelPointedAt(string eventName, string strArg, float numArg, Form sender)
+    _wheelPointedAt = numArg as int
+EndEvent
+
+; Picked with Activate (E / Enter)
+Event OnWheelChoice(string eventName, string strArg, float numArg, Form sender)
+    if _wheelChoice < 0
+        _wheelChoice = numArg as int
+    endIf
+EndEvent
+
+; Closes the wheel from here: on a click, or when the hotkey is let go. Nothing is picked unless _wheelChoice is set
+Function CloseWheel()
+    if _wheelChoice < 0
+        _wasWheelCancelled = true
+    endIf
+    UI.CloseCustomMenu()
+    EndWheelWait()
+EndFunction
+
+; UIWheelMenu waits for its own choice event, which a click or letting go of the hotkey never sends, so its wait is ended
+; here. Otherwise it would only return 5 seconds later, and the wheel couldn't open again until then. Its wait only ends
+; once the wheel is off the screen. A choice event can't end it: UIWheelMenu stops listening for choices when it closes
+Function EndWheelWait()
+    UIExtensions.GetMenu("UIWheelMenu", false).Unlock()
+EndFunction
+
+; Closed by the wheel itself: picked with Activate, or closed with Escape / Tab
+Event OnWheelClosed(string eventName, string strArg, float numArg, Form sender)
+    if _isWheelOpen
+        if _wheelChoice < 0
+            _wasWheelCancelled = true
+        endIf
+        EndWheelWait()
+    endIf
+EndEvent
+
+; The place that was picked, or -1 if the wheel was closed without a choice
+int Function GetWheelChoice()
+    return _wheelChoice
+EndFunction
+
+; True when the wheel was closed without a choice. What UIWheelMenu returned then is an old choice
+bool Function WasWheelCancelled()
+    return _wasWheelCancelled
+EndFunction
+
+; Not limited to outside menus like OnKeyDown: the wheel is a menu
+Event OnKeyUp(int KeyCode, float HoldTime)
+    if !_isWheelOpen || _wasWheelCancelled
+        return
+    endIf
+    if KeyCode == MantellaWheelHotkey
+        CloseWheel() ; Let go without a choice, or after picking with Activate in case the wheel didn't close itself
+    elseIf _wheelChoice >= 0
+        return
+    elseIf KeyCode == LEFT_MOUSE_BUTTON && UI.IsMenuOpen("CustomMenu")
+        _wheelChoice = _wheelPointedAt
+        CloseWheel()
+    endIf
+EndEvent
 
 Event OnKeyDown(int KeyCode)
     ;this function was previously in MantellaListener Script back in Mantella 0.9.2
@@ -441,6 +585,8 @@ Event OnKeyDown(int KeyCode)
             SendModEvent("Mantella_NpcInitiativeHotkey") ; The check lives in MantellaListenerScript
         elseIf KeyCode == MantellaNpcEventHotkey
             SendModEvent("Mantella_NpcEventHotkey") ; The check lives in MantellaListenerScript
+        elseIf KeyCode == MantellaWheelHotkey
+            OpenWheel()
         elseIf KeyCode == MantellaRadiantHotkey
             radiantEnabled =! radiantEnabled
             if radiantEnabled == True

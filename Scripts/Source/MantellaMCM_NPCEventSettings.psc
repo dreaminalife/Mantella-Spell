@@ -22,7 +22,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_npcEventMaxCandidates = mcm.AddSliderOption("Max NPCs per Check", repository.npcEventMaxCandidates)
 
     mcm.AddHeaderOption("Hotkey")
-    mcm.oid_keymapNpcEventHotkey = mcm.AddKeyMapOption("Check Now", repository.MantellaNpcEventHotkey)
+    mcm.oid_keymapNpcEventHotkey = mcm.AddKeyMapOption("Check Now", repository.MantellaNpcEventHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
 endfunction
 
 function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repository) global

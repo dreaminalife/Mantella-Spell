@@ -575,6 +575,7 @@ Function AddShoutValues(int handle)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_LINESBETWEENJOINS, repository.shoutLinesBetweenJoins)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXPEOPLE, repository.shoutMaxPeople)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXDESCRIBED, repository.shoutMaxCandidates)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_NEWCOMERSREMEMBER, repository.shoutNewcomersRemember)
     if _shoutAddFailedRefid != 0
         SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_ADDFAILED_REFID, _shoutAddFailedRefid)
         _shoutAddFailedRefid = 0

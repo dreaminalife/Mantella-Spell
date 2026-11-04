@@ -53,6 +53,7 @@ int property oid_shoutHearingDistance auto
 int property oid_shoutMaxCandidates auto
 int property oid_shoutMaxListed auto
 int property oid_shoutRequireLineOfSight auto
+int property oid_shoutNewcomersRemember auto
 
 
 int property oid_playerCharacterDescription1 auto
@@ -149,7 +150,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 16
+    Return 17
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -403,6 +404,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("How many of the nearest people the Game Master can pick from, by name. Call someone by name and they can answer, even from across the room. \nDefault: 30")
 	elseIf optionID == oid_shoutRequireLineOfSight
 		SetInfoText("Off: everyone within Hearing Distance can join. On: they also need to be in sight. Either you can see them or they can see you. \nDefault: Off")
+	elseIf optionID == oid_shoutNewcomersRemember
+		SetInfoText("Click to change what someone who joins by shouting remembers. Since Shout: what was said since you started shouting. Last Line: your last line and the replies to it. Everything: the whole conversation. \nDefault: Since Shout")
 
     elseIf optionID == oid_playerCharacterDescription1	
 		SetInfoText("The description of the player used in the prompt for the LLM. This is not a bio of the player. \nTry to only put things here that are obvious about your character when the NPC meets them. e.g.'A tall and broad Nord man with long red hair''")

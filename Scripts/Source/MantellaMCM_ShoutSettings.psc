@@ -12,6 +12,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Joining")
     mcm.oid_shoutLinesBetweenJoins = mcm.AddSliderOption("Lines Between Joins", repository.shoutLinesBetweenJoins)
     mcm.oid_shoutMaxPeople = mcm.AddSliderOption("Most People in Conversation", repository.shoutMaxPeople)
+    mcm.oid_shoutNewcomersRemember = mcm.AddTextOption("Newcomers Remember", NewcomersRememberLabel(repository.shoutNewcomersRemember))
     mcm.oid_showShoutMessages = mcm.AddToggleOption("Show Messages", repository.showShoutMessages)
 endfunction
 
@@ -74,5 +75,19 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_showShoutMessages
         Repository.showShoutMessages =! Repository.showShoutMessages
         mcm.SetToggleOptionValue(optionID, Repository.showShoutMessages)
+    elseIf optionID == mcm.oid_shoutNewcomersRemember
+        ; Each click moves to the next choice
+        Repository.shoutNewcomersRemember = (Repository.shoutNewcomersRemember + 1) % 3
+        mcm.SetTextOptionValue(optionID, NewcomersRememberLabel(Repository.shoutNewcomersRemember))
     endif
+endfunction
+
+; The name shown for each Newcomers Remember choice. The number is what the server gets
+string function NewcomersRememberLabel(int choice) global
+    if choice == 1
+        return "Last Line"
+    elseIf choice == 2
+        return "Everything"
+    endif
+    return "Since Shout"
 endfunction

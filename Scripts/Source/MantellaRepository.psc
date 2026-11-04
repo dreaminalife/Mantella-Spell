@@ -69,6 +69,7 @@ float property shoutHearingDistance auto ; Meters
 int property shoutMaxCandidates auto ; Most People Described: the nearest people the Game Master gets the bios and memories of
 int property shoutMaxListed auto ; Most People Listed: the nearest people the Game Master may pick, by name
 bool property shoutRequireLineOfSight auto
+int property shoutNewcomersRemember auto ; What someone who joins by shouting heard before: 0 since you started shouting, 1 your last line, 2 the whole conversation
 
 string property playerCharacterDescription1 auto
 string property playerCharacterDescription2 auto
@@ -163,6 +164,9 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 17 || isFirstInit)
+        shoutNewcomersRemember = 0
+    EndIf
     If (lastVersion < 16 || isFirstInit)
         shoutMaxListed = 30
     EndIf

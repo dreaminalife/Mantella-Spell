@@ -36,6 +36,9 @@ EndFunction
 int Function ACTION_PRIVATE() global ; Back to only the people the player added. Those who joined by shouting leave
     return 11
 EndFunction
+int Function ACTION_SAY_TO_ROOM() global ; Just saying something: said to whoever is around. See MantellaShout.SayToRoom
+    return 12
+EndFunction
 
 string Function COMPANIONS_KEY() global ; StorageUtil form list on the player, saved with the game
     return "Mantella_Companions"
@@ -78,6 +81,7 @@ Function Open(MantellaRepository repository) global
     int count = 0
     if !isRunning
         count = AddOption(wheel, actions, count, "Companions", "Talk to my companions", ACTION_TALK_TO_COMPANIONS())
+        count = AddOption(wheel, actions, count, "Say", "Say something to anyone nearby", ACTION_SAY_TO_ROOM())
         if target
             count = AddOption(wheel, actions, count, "Talk", "Talk to " + name, ACTION_TALK_TO_TARGET())
             if IsOnCompanionsList(target)
@@ -146,6 +150,8 @@ Function RunAction(int actionId, MantellaRepository repository, MantellaConversa
     Actor player = Game.GetPlayer()
     if actionId == ACTION_TALK_TO_COMPANIONS()
         StartWithCompanions(repository, conversation)
+    elseIf actionId == ACTION_SAY_TO_ROOM()
+        MantellaShout.SayToRoom(repository, conversation)
     elseIf actionId == ACTION_TALK_TO_TARGET()
         repository.MantellaSpell.Cast(player, target) ; Starts the conversation or adds them, like the Start / Add hotkey
     elseIf actionId == ACTION_REMOVE_TARGET()

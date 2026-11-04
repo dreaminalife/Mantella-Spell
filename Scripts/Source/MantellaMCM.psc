@@ -322,7 +322,7 @@ Event OnOptionHighlight (Int optionID)
     elseIf optionID == oid_keymapStartAddHotkey
 		SetInfoText("Either starts a conversation or adds an NPC to a conversation.")
 	elseIf optionID == oid_keymapPromptHotkey
-		SetInfoText("Opens the text prompt or starts the mic recording depending on the context and the microphone options above. \nDefault: H")
+		SetInfoText("Opens the text prompt or starts the mic recording depending on the context and the microphone options above. With no conversation running, what you say is said to anyone nearby. \nDefault: H")
 	elseIf optionID == oid_keymapEndHotkey
 		SetInfoText("Ends all Mantella conversations.")
 	elseIf optionID == oid_keymapCustomGameEventHotkey	

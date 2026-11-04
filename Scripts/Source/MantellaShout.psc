@@ -50,3 +50,33 @@ bool Function CanJoin(Actor npc, MantellaRepository repository, MantellaConversa
     endIf
     return !repository.shoutRequireLineOfSight || npc.HasLOS(player) || player.HasLOS(npc)
 EndFunction
+
+; Just saying something: with no conversation running, the player says something to whoever is around. It starts a conversation with only
+; the player, already shouting. MantellaSoftware's Game Master lets someone nearby answer and join, or nobody does and it ends.
+; Started from the Conversation Wheel (Say) or the talk hotkey. Typed text is asked for first, so cancelling the text box starts nothing
+Function SayToRoom(MantellaRepository repository, MantellaConversation conversation) global
+    if conversation.IsRunning()
+        return
+    endIf
+    if FindNearby(repository, conversation).Length == 0
+        Debug.Notification("Nobody is around to hear you")
+        return
+    endIf
+    string line = ""
+    if !repository.microphoneEnabled
+        UIExtensions.InitMenu("UITextEntryMenu")
+        UIExtensions.OpenMenu("UITextEntryMenu")
+        line = UIExtensions.GetMenuResultString("UITextEntryMenu")
+        if line == ""
+            return
+        endIf
+        if conversation.IsRunning()
+            return ; Something else started a conversation while the text box was open
+        endIf
+    endIf
+    Actor[] actors = new Actor[1]
+    actors[0] = Game.GetPlayer()
+    conversation.Start()
+    conversation.SetRoomStart(line)
+    conversation.StartConversation(actors)
+EndFunction

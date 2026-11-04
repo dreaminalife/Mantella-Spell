@@ -56,6 +56,9 @@ string _shoutNearbyShown = "" ; The names last shown with Show Messages
 Form[] _shoutJoined ; The people who joined by shouting. They leave when the player switches back to Private
 Form[] _shoutSentActors ; The people nearby whose full actor settings were sent, so the server has their bios and memories
 int _shoutAddFailedRefid = 0
+bool _isRoomStart = false ; The next conversation starts with only the player, who says something to the room (Just saying something)
+string _roomLine = "" ; What the player typed to say to the room. Sent as soon as the conversation is ready. Empty with a microphone
+bool _isRoomFirstTurn = false ; The room conversation is waiting for the player's first line, which the player already asked to say
 
 event OnInit()
     RegisterForConversationEvents()
@@ -93,6 +96,13 @@ EndFunction
 ; The next conversation may start with more than one NPC
 Function SetGroupStart()
     _isGroupStart = true
+EndFunction
+
+; The next conversation starts with only the player, who says something to the room. Someone nearby may answer, or nobody does.
+; line is what the player typed, or empty when they speak with the microphone
+Function SetRoomStart(string line)
+    _isRoomStart = true
+    _roomLine = line
 EndFunction
 
 ; The next conversation acts out an NPC Event (see MantellaListenerScript). The id is sent with the start request
@@ -135,6 +145,11 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     _npcInitiative = false
     bool isGroupStart = _isGroupStart
     _isGroupStart = false
+    bool isRoomStart = _isRoomStart
+    _isRoomStart = false
+    string roomLine = _roomLine
+    _roomLine = ""
+    _isRoomFirstTurn = false
     _hasNpcEventMonitorValues = false
     _npcEventAddFailedRefid = 0
     _sendQuestChecksCatchUp = false
@@ -152,7 +167,7 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     
     AddActors(actorsToStartConversationWith)
 
-    if(actorsToStartConversationWith.Length < 2)
+    if(actorsToStartConversationWith.Length < 2 && !isRoomStart) ; Saying something to the room starts with only the player
         Debug.Notification("Not enough characters to start a conversation.")
         _npcEventId = 0
         return
@@ -168,6 +183,16 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     endIf
     BuildContext(true)
     AddCurrentActorsAndContext(handle, true)
+    if isRoomStart
+        ; Starts already shouting, so MantellaSoftware starts it as a Shout conversation and its Game Master decides whether anyone answers
+        _isShouting = true
+        _shoutJoined = Utility.CreateFormArray(0)
+        _shoutSentActors = Utility.CreateFormArray(0)
+        RefreshShoutNearby()
+        AddShoutValues(handle)
+        _roomLine = roomLine
+        _isRoomFirstTurn = true
+    endIf
 
     if repository.microphoneEnabled
         if repository.useHotkeyToStartMic
@@ -276,7 +301,18 @@ function ContinueConversation(string nextAction, int handle)
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_PLAYERTALK)
         _does_accept_player_input = True
-        If (repository.microphoneEnabled && !repository.useHotkeyToStartMic)
+        If (_isRoomFirstTurn)
+            ; The player asked to say something to the room: what they typed is sent now, or the microphone starts listening
+            _isRoomFirstTurn = false
+            string line = _roomLine
+            _roomLine = ""
+            If (line != "")
+                _does_accept_player_input = False
+                sendRequestForPlayerInput(line, updateContext=True)
+            Else
+                sendRequestForVoiceTranscribe()
+            EndIf
+        ElseIf (repository.microphoneEnabled && !repository.useHotkeyToStartMic)
             sendRequestForVoiceTranscribe()
         Else
             ShowRepeatingMessage("Awaiting player input...")
@@ -292,6 +328,9 @@ function ContinueConversation(string nextAction, int handle)
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_SHOUT_ADDACTOR)
         AddShoutActor(SKSE_HTTP.getInt(handle, mConsts.KEY_SHOUT_ADDACTOR_REFID, 0))
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_ENDCONVERSATION)
+        if !_hasBeenStopped && Participants.GetSize() < 2 && IsPlayerInConversation()
+            Debug.Notification("Nobody answers") ; The player said something to the room. Not when the player ended it
+        endIf
         CleanupConversation()
     endIf
 endFunction
@@ -505,6 +544,8 @@ Function SetShout(bool isOn)
             i += 1
         endWhile
         RemoveActors(leaving) ; Ends the conversation if fewer than 2 people are left
+    elseIf Participants.GetSize() < 2
+        EndConversation() ; The player said something to the room and nobody has joined yet
     endIf
 EndFunction
 
@@ -673,6 +714,8 @@ Function CleanupConversation()
     _npcEventId = 0
     _hasNpcEventMonitorValues = false
     _sendQuestChecksCatchUp = false
+    _isRoomFirstTurn = false
+    _roomLine = ""
     ClearShout()
     ;SKSE_HTTP.clearAllDictionaries()
     If (MantellaConversationParticipantsQuest.IsRunning())

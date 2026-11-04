@@ -551,7 +551,10 @@ Event OnKeyDown(int KeyCode)
                 ;Utility.Wait(0.5)
             endIf        
         elseIf KeyCode == MantellaListenerTextHotkey
-            If(!microphoneEnabled) ;Otherwise, try to open player text input if microphone is off
+            MantellaConversation roomConversation = Quest.GetQuest("MantellaConversation") as MantellaConversation
+            If (!roomConversation.IsRunning())
+                MantellaShout.SayToRoom(self, roomConversation) ; Just saying something: said to whoever is around
+            ElseIf(!microphoneEnabled) ;Otherwise, try to open player text input if microphone is off
                 MantellaConversation conversation = Quest.GetQuest("MantellaConversation") as MantellaConversation
                 if(conversation.IsRunning())
                     conversation.GetPlayerTextInput()

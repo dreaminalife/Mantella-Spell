@@ -369,7 +369,7 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_showNpcInitiativeMessages
 		SetInfoText("Enable NPC Initiative debugging messages.")
 	elseIf optionID == oid_keymapNpcInitiativeHotkey
-		SetInfoText("Checks right away for a nearby NPC who wants to talk to you. Does nothing while NPC Initiative is turned off. Ignores Min Time Between Checks.")
+		SetInfoText("Checks right away for a nearby NPC who wants to talk to you. Works even when NPC Initiative is turned off, and ignores Min Time Between Checks. Approach on the Conversation Wheel does the same.")
 	elseIf optionID == oid_npcInitiativeHotkeySkipsThreshold
 		SetInfoText("Hotkey checks ignore the NPC Initiative Threshold set in Mantella's settings: the NPC the decision model rates most likely approaches, unless Nobody is its top answer. Only used with a decision model. \nDefault: Off")
 

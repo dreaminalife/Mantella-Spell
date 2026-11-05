@@ -345,16 +345,15 @@ float _lastInitiativeCheckTime = 0.0
 float _lastPlayerConversationTime = 0.0
 float _initiativeSentTime = 0.0
 bool _initiativePending = false
+bool _isInitiativeManual = false ; The pending check was started with the hotkey or the wheel, so the player hears back when nobody comes
 Actor[] _initiativeCandidates
 int _initiativeCandidateCount = 0
 float initiativePendingTimeout = 30.0 ; Seconds. An error reply can't be told apart from other requests' errors, so a lost reply times out
 bool _isSendingCheck = false ; Shared by NPC Initiative and NPC Events, so only one check is sent at a time
 
-; The hotkey checks right away, even when a check ran recently. It does nothing while NPC Initiative is off
+; The hotkey (and Approach on the wheel) checks right away, even when a check ran recently or NPC Initiative is off,
+; like the NPC Event hotkey. Enabled only controls the automatic checks
 Event OnNpcInitiativeHotkey(string eventName, string strArg, float numArg, Form sender)
-    if !repository.npcInitiativeEnabled
-        return
-    endIf
     if TryNpcInitiative(true)
         if !repository.showNpcInitiativeMessages ; Otherwise the check already named the NPCs it considers
             Debug.Notification("NPC Initiative: checking nearby NPCs")
@@ -378,7 +377,7 @@ bool Function TryNpcInitiative(bool isManual = false)
 EndFunction
 
 bool Function RunNpcInitiativeCheck(bool isManual)
-    if !repository.npcInitiativeEnabled || conversation.IsRunning()
+    if (!repository.npcInitiativeEnabled && !isManual) || conversation.IsRunning()
         return false
     endIf
     float now = Utility.GetCurrentRealTime()
@@ -429,6 +428,7 @@ bool Function RunNpcInitiativeCheck(bool isManual)
 
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
     _initiativePending = true
+    _isInitiativeManual = isManual
     _initiativeSentTime = now
     _lastPlayerConversationTime = now ; A sent check counts as the idle check, so the next one comes after the idle minutes again
     if repository.showNpcInitiativeMessages
@@ -800,6 +800,8 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
     if !chosen
         if repository.showNpcInitiativeMessages
             Debug.Notification("NPC Initiative: nobody")
+        else
+            NotifyNobodyComes()
         endIf
         return
     endIf
@@ -807,6 +809,8 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
     if !CanPlayerBeApproached() || !IsInitiativeCandidate(chosen)
         if repository.showNpcInitiativeMessages
             Debug.Notification("NPC Initiative: " + chosen.GetDisplayName() + " can no longer approach")
+        else
+            NotifyNobodyComes()
         endIf
         return
     endIf
@@ -820,4 +824,12 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
     conversation.SetNpcInitiative()
     conversation.StartConversation(actors)
 endEvent
+
+; Only for checks the player started. The automatic checks stay quiet when nobody comes.
+; A conversation the player started while the check waited also gives "nobody", which needs no note
+Function NotifyNobodyComes()
+    if _isInitiativeManual && !conversation.IsRunning()
+        Debug.Notification("Nobody comes over")
+    endIf
+EndFunction
 

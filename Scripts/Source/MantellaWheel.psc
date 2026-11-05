@@ -39,6 +39,9 @@ EndFunction
 int Function ACTION_SAY_TO_ROOM() global ; Just saying something: said to whoever is around. See MantellaShout.SayToRoom
     return 12
 EndFunction
+int Function ACTION_NPC_INITIATIVE() global ; Someone nearby with a reason to talk walks up to the player. The same as the NPC Initiative hotkey
+    return 13
+EndFunction
 
 string Function COMPANIONS_KEY() global ; StorageUtil form list on the player, saved with the game
     return "Mantella_Companions"
@@ -91,6 +94,7 @@ Function Open(MantellaRepository repository) global
             endIf
         endIf
         count = AddOption(wheel, actions, count, "Event", "Something happens: start an NPC Event nearby", ACTION_START_NPC_EVENT())
+        count = AddOption(wheel, actions, count, "Approach", "Someone nearby with a reason to talk to me comes over", ACTION_NPC_INITIATIVE())
     else
         if isPlayerIn
             count = AddOption(wheel, actions, count, "Interrupt", "Stop the NPCs and take my turn", ACTION_INTERRUPT())
@@ -160,6 +164,8 @@ Function RunAction(int actionId, MantellaRepository repository, MantellaConversa
         ToggleCompanion(target)
     elseIf actionId == ACTION_START_NPC_EVENT()
         player.SendModEvent("Mantella_NpcEventHotkey") ; The same as the NPC Event hotkey. The check lives in MantellaListenerScript
+    elseIf actionId == ACTION_NPC_INITIATIVE()
+        player.SendModEvent("Mantella_NpcInitiativeHotkey") ; The same as the NPC Initiative hotkey. The check lives in MantellaListenerScript
     elseIf actionId == ACTION_INTERRUPT()
         if conversation.IsRunning()
             conversation.RequestInterrupt()

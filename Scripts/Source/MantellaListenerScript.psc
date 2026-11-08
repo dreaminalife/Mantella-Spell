@@ -70,6 +70,8 @@ Event OnPlayerLoadGame()
     RequestQuestCheckList()
     RegisterForModEvent("Mantella_NpcInitiativeHotkey", "OnNpcInitiativeHotkey")
     RegisterForModEvent("Mantella_NpcEventHotkey", "OnNpcEventHotkey")
+    RegisterForModEvent("Mantella_EventTest", "OnEventTest")
+    RegisterForModEvent(NPC_EVENT_BUILD_EVENT(), "OnNpcEventBuild")
     RegisterForMenu("Loading Menu")
     _lastCell = PlayerRef.GetParentCell()
     ; Real time starts from 0 on every game launch, so times kept in the save would be in the future
@@ -102,6 +104,10 @@ float tickSeconds = 5.0
 float _lastRadiantAttemptTime = 0.0
 
 event OnUpdate()
+    if repository.eventTestRun != 0 ; Set from the console by the in-game test's batch file
+        repository.eventTestRun = 0
+        SendModEvent("Mantella_EventTest") ; Runs on its own thread, so the ticks go on during the test
+    endIf
     float now = Utility.GetCurrentRealTime()
     if conversation.IsRunning()
         if conversation.IsPlayerInConversation()
@@ -109,8 +115,12 @@ event OnUpdate()
         endIf
         if conversation.IsNpcEvent() && !conversation.IsEnding() ; Saving the memories can take longer than a tick
             MonitorNpcEvent()
-        elseIf conversation.IsShouting() && !conversation.IsEnding()
-            conversation.RefreshShoutNearby() ; Who can hear the player now
+        endIf
+        if conversation.IsShouting() && !conversation.IsEnding()
+            conversation.RefreshShoutNearby() ; Who can join now. NPC Events run in Shout too
+        endIf
+        if !conversation.IsEnding()
+            conversation.RefreshStaleActors() ; Who was kept, not built again, by the last join or leave
         endIf
     elseIf IsCheckPending(now)
         ; The check's result may start a conversation
@@ -553,67 +563,140 @@ EndFunction
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Mantella's server invents a scene between some of the NPCs near the player, who then act it out while the player is a bystander.
 ; The player can watch, walk away or step in, and the NPCs can draw in others nearby, the player included.
+; The scene runs in Shout from the start: the people nearby join by Shout, found with the NPC Event's rules while the player watches
 
 float _lastEventCheckTime = 0.0
 float _eventSentTime = 0.0
 bool _eventPending = false
 float eventPendingTimeout = 90.0 ; Seconds. The event generator writes a whole scene, so it can take longer than an NPC Initiative check
-Actor[] _eventCandidates ; The NPCs sent with the last check. The scene's participants and the people near it are among them
+Actor[] _eventCandidates ; Everyone nearby named in the last check, nearest first. The scene's participants are among them
 int _eventCandidateCount = 0
+Form[] _eventBuiltActors ; The nearest candidates, sent in full with the last check
+int[] _eventBuiltHandles ; Their actor settings, which the scene's start uses again
+int _eventPlayerHandle = 0 ; The player's actor settings, sent with the check
+int _npcEventBuildId = 0 ; Counts the builds asked for (BuildNpcEventActors). A newer one changes it, so an older build stops and its result is unused
+int _npcEventBuildStartedId = 0 ; The last build that began running
+int _npcEventBuildDoneId = 0 ; The last build that finished
 
-; The hotkey checks right away, even when NPC Events are off or a check ran recently
+string Function NPC_EVENT_BUILD_EVENT() global
+    return "Mantella_NpcEventBuild"
+EndFunction
+
+; The hotkey checks right away, even when NPC Events are off or a check ran recently. Also NPC Event on the Conversation Wheel.
+; If no check can be sent, the player is told why
 Event OnNpcEventHotkey(string eventName, string strArg, float numArg, Form sender)
-    if !TryNpcEvent(true)
-        Debug.Notification("NPC Event: can't check right now")
+    string reason = TryNpcEventCheck(true)
+    if reason != ""
+        Debug.Notification("NPC Event: " + reason)
     elseIf !repository.showNpcEventMessages ; Otherwise the check already named the NPCs it considers
         Debug.Notification("NPC Event: checking nearby NPCs")
     endIf
 EndEvent
 
+Event OnEventTest(string eventName, string strArg, float numArg, Form sender)
+    MantellaEventTest.Run(repository, conversation, self)
+EndEvent
+
 ; Returns true if a check was sent to the server
 bool Function TryNpcEvent(bool isManual = false)
-    if _isSendingCheck
-        return false
-    endIf
-    _isSendingCheck = true
-    bool hasSent = RunNpcEventCheck(isManual)
-    _isSendingCheck = false
-    return hasSent
+    return TryNpcEventCheck(isManual) == ""
 EndFunction
 
-bool Function RunNpcEventCheck(bool isManual)
-    if (!repository.npcEventEnabled && !isManual) || !CanNpcEventStart()
-        return false
+; Returns "" if a check was sent to the server, otherwise why not, as the player is told it
+string Function TryNpcEventCheck(bool isManual)
+    if _isSendingCheck
+        return "busy with another check, try again in a moment"
+    endIf
+    _isSendingCheck = true
+    string reason = RunNpcEventCheck(isManual)
+    _isSendingCheck = false
+    return reason
+EndFunction
+
+; Started by the player (isManual), with Ask for a Hint, a text box asks what they would like to happen, once there are enough people nearby.
+; Cancelled or empty: a surprise
+string Function RunNpcEventCheck(bool isManual)
+    if !repository.npcEventEnabled && !isManual
+        return "NPC Events are off"
+    endIf
+    string reason = WhyNpcEventCantStart()
+    if reason != ""
+        return reason
     endIf
     float now = Utility.GetCurrentRealTime()
-    if IsCheckPending(now) || (!isManual && now - _lastEventCheckTime < repository.npcEventFrequency * 60)
-        return false
+    if IsCheckPending(now)
+        return "busy with another check, try again in a moment"
+    elseIf !isManual && now - _lastEventCheckTime < repository.npcEventFrequency * 60
+        return "too soon after the last check"
     endIf
     _lastEventCheckTime = now
 
     FindNpcEventCandidates()
     if _eventCandidateCount < 2
-        if repository.showNpcEventMessages
+        if !isManual && repository.showNpcEventMessages ; The hotkey tells the player itself
             Debug.Notification("NPC Event: not enough NPCs nearby")
         endIf
-        return false
+        return "not enough people nearby, it needs at least 2"
+    endIf
+
+    string hint = ""
+    _npcEventBuildId += 1
+    int buildId = _npcEventBuildId
+    if isManual && repository.npcEventAskForHint
+        StartNpcEventBuild(buildId) ; While the player types
+        UIExtensions.InitMenu("UITextEntryMenu")
+        UIExtensions.OpenMenu("UITextEntryMenu")
+        hint = UIExtensions.GetMenuResultString("UITextEntryMenu")
+        Utility.Wait(0.1) ; Only counts once the text box has closed, so the check below doesn't see the game still in a menu
+        reason = WhyNpcEventCantStart() ; Something may have started while the player typed
+        if reason != ""
+            _npcEventBuildId += 1 ; The build stops
+            return reason
+        endIf
+        now = Utility.GetCurrentRealTime() ; The check is sent now, not when the text box opened
+        buildId = FinishNpcEventBuild(buildId)
+    else
+        BuildNpcEventActors(buildId)
+    endIf
+    if _npcEventBuildDoneId != buildId ; Replaced by another check: its people aren't these
+        return "busy with another check, try again in a moment"
     endIf
 
     MantellaConstants consts = conversation.mConsts
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, consts.KEY_REQUESTTYPE, consts.KEY_REQUESTTYPE_NPCEVENT)
     SKSE_HTTP.setString(handle, consts.KEY_STARTCONVERSATION_WORLDID, PlayerRef.GetDisplayName() + repository.worldID)
+    if hint != ""
+        SKSE_HTTP.setString(handle, consts.KEY_EVENT_HINT, hint)
+    endIf
 
-    int[] actorHandles = Utility.CreateIntArray(_eventCandidateCount + 1)
-    actorHandles[0] = conversation.buildActorSetting(PlayerRef)
+    ; Everyone nearby by name. Only the nearest (Most People Described) in full, so the event generator gets their bios and memories.
+    ; Built by BuildNpcEventActors
+    int described = 0
+    if _eventBuiltHandles
+        described = _eventBuiltHandles.Length
+    endIf
+    int[] actorHandles = Utility.CreateIntArray(described + 1)
+    actorHandles[0] = _eventPlayerHandle
+    int[] refids = Utility.CreateIntArray(_eventCandidateCount)
+    string[] names = Utility.CreateStringArray(_eventCandidateCount)
     string candidateNames = ""
     int i = 0
     while i < _eventCandidateCount
-        actorHandles[i + 1] = conversation.buildActorSetting(_eventCandidates[i])
-        candidateNames += _eventCandidates[i].GetDisplayName() + " "
+        refids[i] = (_eventCandidates[i] as Form).GetFormID()
+        names[i] = _eventCandidates[i].GetDisplayName()
+        if i < described
+            actorHandles[i + 1] = _eventBuiltHandles[i]
+            candidateNames += names[i] + " "
+        endIf
         i += 1
     endWhile
+    if _eventCandidateCount > described
+        candidateNames += "and " + (_eventCandidateCount - described) + " more by name"
+    endIf
     SKSE_HTTP.setNestedDictionariesArray(handle, consts.KEY_ACTORS, actorHandles)
+    SKSE_HTTP.setIntArray(handle, consts.KEY_NPCEVENT_NEARBY_REFIDS, refids)
+    SKSE_HTTP.setStringArray(handle, consts.KEY_NPCEVENT_NEARBY_NAMES, names)
 
     int contextHandle = SKSE_HTTP.createDictionary()
     string locationName = "Skyrim"
@@ -632,32 +715,97 @@ bool Function RunNpcEventCheck(bool isManual)
     if repository.showNpcEventMessages
         Debug.Notification("NPC Event check: " + candidateNames)
     endIf
-    return true
+    return ""
 EndFunction
 
-; The player can be sneaking: watching unseen is part of it
-bool Function CanNpcEventStart()
-    return !conversation.IsRunning() && !PlayerRef.IsInCombat() && !Utility.IsInMenuMode() && !UI.IsMenuOpen("Dialogue Menu")
-EndFunction
-
-; Keeps the nearest available NPCs within hearing distance in _eventCandidates. Line of sight is not needed
-Function FindNpcEventCandidates()
-    int maxCount = ClampInt(repository.npcEventMaxCandidates, 2, 10)
-    _eventCandidates = new Actor[10]
-    float[] distances = new float[10]
-    _eventCandidateCount = 0
-    ; ScanCellNPCs' own keyword filter misses keywords that come from the race, like ActorTypeNPC, so it is checked here
-    Keyword actorTypeNPC = Keyword.GetKeyword("ActorTypeNPC")
-    Actor[] found = MiscUtil.ScanCellNPCs(PlayerRef, ConvertMeterToGameUnits(repository.npcEventHearingDistance))
-    Actor npc
+; Builds the player's actor settings and the nearest candidates' (Most People Described), for the check and then the scene's start.
+; Building someone takes a moment, so with Ask for a Hint it runs on another thread while the player types (StartNpcEventBuild)
+Function BuildNpcEventActors(int buildId)
+    _npcEventBuildStartedId = buildId
+    Actor[] candidates = _eventCandidates
+    int described = ClampInt(repository.npcEventMaxCandidates, 2, 10)
+    if described > _eventCandidateCount
+        described = _eventCandidateCount
+    endIf
+    Form[] built = Utility.CreateFormArray(described)
+    int[] handles = Utility.CreateIntArray(described)
+    int playerHandle = conversation.buildActorSetting(PlayerRef)
     int i = 0
-    while i < found.Length
-        npc = found[i]
-        if npc.HasKeyword(actorTypeNPC) && IsAvailableNpc(npc) && (repository.npcEventIncludeFollowers || !IsActiveFollower(npc))
-            _eventCandidateCount = InsertByDistance(_eventCandidates, distances, _eventCandidateCount, maxCount, npc, PlayerRef.GetDistance(npc))
+    while i < described
+        if buildId != _npcEventBuildId
+            return ; Replaced, or the check was given up
         endIf
+        built[i] = candidates[i]
+        handles[i] = conversation.buildActorSetting(candidates[i])
         i += 1
     endWhile
+    if buildId != _npcEventBuildId || _npcEventBuildDoneId == buildId
+        return
+    endIf
+    _eventBuiltActors = built
+    _eventBuiltHandles = handles
+    _eventPlayerHandle = playerHandle
+    _npcEventBuildDoneId = buildId
+EndFunction
+
+Function StartNpcEventBuild(int buildId)
+    RegisterForModEvent(NPC_EVENT_BUILD_EVENT(), "OnNpcEventBuild") ; Again here, in case this save never registered it on load
+    int eventHandle = ModEvent.Create(NPC_EVENT_BUILD_EVENT())
+    if eventHandle
+        ModEvent.PushInt(eventHandle, buildId)
+        ModEvent.Send(eventHandle)
+    endIf
+EndFunction
+
+Event OnNpcEventBuild(int buildId)
+    if buildId != _npcEventBuildId || _npcEventBuildStartedId == buildId || _npcEventBuildDoneId == buildId
+        return ; Replaced, or FinishNpcEventBuild built them itself
+    endIf
+    BuildNpcEventActors(buildId)
+EndEvent
+
+; Waits for the build to finish. If it never began (the mod event didn't arrive), or still runs after MAX_BUILD_WAIT (it should never take
+; that long), it is given up and the people are built here. Returns the id of the build whose people are ready
+int Function FinishNpcEventBuild(int buildId)
+    float waited = 0.0
+    while _npcEventBuildDoneId != buildId && buildId == _npcEventBuildId && (_npcEventBuildStartedId == buildId || waited < 2.0) && waited < MantellaConversation.MAX_BUILD_WAIT()
+        Utility.WaitMenuMode(0.1)
+        waited += 0.1
+    endWhile
+    if _npcEventBuildDoneId != buildId && buildId == _npcEventBuildId
+        if _npcEventBuildStartedId == buildId
+            _npcEventBuildId += 1 ; Given up: the build stops at its next step, and its result is unused
+            buildId = _npcEventBuildId
+        endIf
+        BuildNpcEventActors(buildId)
+    endIf
+    return buildId
+EndFunction
+
+bool Function CanNpcEventStart()
+    return WhyNpcEventCantStart() == ""
+EndFunction
+
+; Why an NPC Event can't start now, as the player is told it. "" if it can. The player can be sneaking: watching unseen is part of it
+string Function WhyNpcEventCantStart()
+    if conversation.IsRunning()
+        return "a conversation is already running"
+    elseIf PlayerRef.IsInCombat()
+        return "not during combat"
+    elseIf Utility.IsInMenuMode() || UI.IsMenuOpen("Dialogue Menu")
+        return "not while a menu or dialogue is open"
+    endIf
+    return ""
+EndFunction
+
+; Keeps everyone nearby in _eventCandidates, nearest first: within the NPC Event's Hearing Distance, at most the Shout Mode page's
+; Most People Listed. Line of sight is not needed
+Function FindNpcEventCandidates()
+    _eventCandidates = MantellaShout.FindNearbyForNpcEvent(repository, conversation)
+    _eventCandidateCount = 0
+    if _eventCandidates
+        _eventCandidateCount = _eventCandidates.Length
+    endIf
 EndFunction
 
 Actor Function FindNpcEventCandidate(int refid)
@@ -703,28 +851,22 @@ Function OnNpcEventResult(int handle)
     endIf
     conversation.Start()
     conversation.SetNpcEvent(eventId)
+    conversation.SetNpcEventScan(_eventCandidates, _eventBuiltActors, _eventBuiltHandles) ; So the start doesn't scan and build again
     conversation.StartConversation(participants)
 EndFunction
 
-; The server picked someone near the scene, who joins before they speak
+; The server picked the player watching the scene, who joins before anyone speaks again. People nearby join by Shout instead
 Function AddNpcEventActor(int refid)
     if !conversation.IsRunning() || !conversation.IsNpcEvent()
         return
     endIf
     if refid == (PlayerRef as Form).GetFormID()
         conversation.AddNpcEventActor(PlayerRef)
-        return
-    endIf
-    Actor npc = FindNpcEventCandidate(refid)
-    if npc && IsAvailableNpc(npc) && PlayerRef.GetDistance(npc) <= ConvertMeterToGameUnits(repository.npcEventHearingDistance)
-        conversation.AddNpcEventActor(npc)
-    else
-        conversation.NpcEventActorCouldNotBeAdded(refid)
     endIf
 EndFunction
 
 ; Runs on every tick while an NPC Event is running. Ends the scene once a bystander player has walked away,
-; and tells the server who is still near the scene and whether the player can be noticed
+; and tells the server whether the player can be noticed. Who is nearby goes with the Shout values
 Function MonitorNpcEvent()
     float hearingDistance = ConvertMeterToGameUnits(repository.npcEventHearingDistance)
     bool isPlayerInScene = conversation.IsPlayerInConversation()
@@ -756,20 +898,7 @@ Function MonitorNpcEvent()
         return
     endIf
     bool isNoticeable = !isPlayerInScene && nearestDistance <= hearingDistance && !PlayerRef.IsSneaking() && (isInSight || !repository.npcEventRequireLineOfSight)
-
-    ; Starts with a 0 that matches nobody, so the array is never empty and "nobody nearby" still reaches the server
-    int[] nearbyRefids = Utility.CreateIntArray(_eventCandidateCount + 1)
-    int nearbyCount = 1
-    i = 0
-    while i < _eventCandidateCount
-        Actor npc = _eventCandidates[i]
-        if !conversation.Participants.HasForm(npc) && IsAvailableNpc(npc) && PlayerRef.GetDistance(npc) <= hearingDistance
-            nearbyRefids[nearbyCount] = (npc as Form).GetFormID()
-            nearbyCount += 1
-        endIf
-        i += 1
-    endWhile
-    conversation.SetNpcEventMonitorValues(Utility.ResizeIntArray(nearbyRefids, nearbyCount), isNoticeable)
+    conversation.SetNpcEventMonitorValues(isNoticeable)
 EndFunction
 
 event OnHttpReplyReceived(int typedDictionaryHandle)

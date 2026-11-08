@@ -58,8 +58,25 @@ float property npcEventFrequency auto ; Minutes
 float property npcEventHearingDistance auto ; Meters
 bool property npcEventRequireLineOfSight auto
 bool property npcEventIncludeFollowers auto ; Off by default: a follower in a scene follows the player, so walking away would never end it
-int property npcEventMaxCandidates auto
+int property npcEventMaxCandidates auto ; Most People Described: the nearest people the event generator gets the bios and memories of
 bool property showNpcEventMessages auto
+bool property npcEventAskForHint auto ; A text box asks what should happen when the player starts an NPC Event
+
+; Conversation, Nearby and Random Events: picked on the Conversation Wheel during a conversation. Set up on the Events page
+bool property conversationEventAskForHint auto
+bool property conversationEventSendHistory auto
+bool property conversationEventIncludePlayer auto
+bool property nearbyEventAskForHint auto
+bool property nearbyEventSendHistory auto
+bool property nearbyEventIncludePlayer auto
+int property nearbyEventMaxDescribed auto
+bool property nearbyEventIncludeFollowers auto
+bool property randomEventAskForHint auto
+bool property randomEventSendHistory auto
+bool property randomEventIncludePlayer auto
+int property randomEventMaxDescribed auto
+bool property randomEventIncludeFollowers auto
+bool property eventDefaultsAssigned auto ; False on a save the version 18 update never reached, see EnsureEventDefaults
 
 ; Shout: switched on from the Conversation Wheel. See MantellaShout
 int property shoutLinesBetweenJoins auto
@@ -70,6 +87,8 @@ int property shoutMaxCandidates auto ; Most People Described: the nearest people
 int property shoutMaxListed auto ; Most People Listed: the nearest people the Game Master may pick, by name
 bool property shoutRequireLineOfSight auto
 int property shoutNewcomersRemember auto ; What someone who joins by shouting heard before: 0 since you started shouting, 1 your last line, 2 the whole conversation
+; Include Followers on the Shout Mode page, stored the other way round: false (the value of a save that never set it) lets followers join, as before
+bool property shoutExcludeFollowers auto
 
 string property playerCharacterDescription1 auto
 string property playerCharacterDescription2 auto
@@ -139,6 +158,7 @@ bool property NPCDialogue auto ;gia
 bool property NPCdebugSelectModeEnabled auto
 ; bool restartMantellaExe = False
 int property HttpPort auto
+int property eventTestRun auto ; Set to 1 from the console (setpqv MantellaQuest eventTestRun 1) to run the in-game test of the events. See MantellaEventTest
 
 ; The Conversation Wheel while it is open (see MantellaWheel)
 bool _isWheelOpen = false
@@ -164,6 +184,10 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 18 || isFirstInit)
+        shoutExcludeFollowers = false
+        AssignEventDefaults()
+    EndIf
     If (lastVersion < 17 || isFirstInit)
         shoutNewcomersRemember = 0
     EndIf
@@ -315,6 +339,32 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
         HttpPort = 4999
     EndIf
 endFunction
+
+; The Events page's defaults (MCM version 18)
+Function AssignEventDefaults()
+    npcEventAskForHint = false
+    conversationEventAskForHint = false
+    conversationEventSendHistory = true
+    conversationEventIncludePlayer = true
+    nearbyEventAskForHint = false
+    nearbyEventSendHistory = false
+    nearbyEventIncludePlayer = false
+    nearbyEventMaxDescribed = 6
+    nearbyEventIncludeFollowers = false
+    randomEventAskForHint = false
+    randomEventSendHistory = true
+    randomEventIncludePlayer = true
+    randomEventMaxDescribed = 6
+    randomEventIncludeFollowers = false
+    eventDefaultsAssigned = true
+EndFunction
+
+; SkyUI's version update does not run on every save. Called when the menu opens and before an event is generated
+Function EnsureEventDefaults()
+    if !eventDefaultsAssigned
+        AssignEventDefaults()
+    endIf
+EndFunction
 
 function BindStartAddHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the start hotkey KeyMapChange
@@ -473,10 +523,44 @@ EndFunction
 
 ; The hotkey may have been let go before the wheel was on screen, when OnKeyUp could not close it yet
 Event OnWheelShown(string eventName, string strArg, float numArg, Form sender)
-    if _isWheelOpen && _wheelChoice < 0 && !Input.IsKeyPressed(MantellaWheelHotkey)
-        CloseWheel()
+    if !_isWheelOpen
+        return
     endIf
+    if _wheelChoice < 0 && !Input.IsKeyPressed(MantellaWheelHotkey)
+        CloseWheel()
+        return
+    endIf
+    FitWheelTexts()
 EndEvent
+
+; UIWheelMenu's text fields are small and cut off what doesn't fit: the labels on the wheel, the text below it and the name above it.
+; They shrink it to fit instead, as UIExtensions' own follower wheel does for names. Then the texts are set again, so they are laid out
+; with it (UIWheelMenu sets them on this same event, maybe before this ran)
+Function FitWheelTexts()
+    string root = "_root.WheelPhase.WheelBase."
+    string[] fields = new string[10]
+    fields[0] = "TextLeft00"
+    fields[1] = "TextLeft01"
+    fields[2] = "TextLeft02"
+    fields[3] = "TextLeft03"
+    fields[4] = "TextRight00"
+    fields[5] = "TextRight01"
+    fields[6] = "TextRight02"
+    fields[7] = "TextRight03"
+    fields[8] = "Option"
+    fields[9] = "Name"
+    int i = 0
+    while i < fields.Length
+        UI.SetString("CustomMenu", root + fields[i] + ".textAutoSize", "shrink")
+        i += 1
+    endWhile
+    UIWheelMenu wheel = UIExtensions.GetMenu("UIWheelMenu", false) as UIWheelMenu
+    if wheel && _isWheelOpen
+        wheel.UpdateWheelOptionLabels()
+        wheel.UpdateWheelOptions()
+        wheel.UpdateWheelSelection() ; Shows the pointed-at option's text again
+    endIf
+EndFunction
 
 Event OnWheelPointedAt(string eventName, string strArg, float numArg, Form sender)
     _wheelPointedAt = numArg as int

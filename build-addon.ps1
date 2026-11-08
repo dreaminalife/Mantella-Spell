@@ -17,6 +17,7 @@ $Imports = @(
     "$Repo\Scripts\Source",
     "$DepsPath\SkyUI\Scripts\Source",
     "$DepsPath\UIExtensions\scripts\source",
+    "$DepsPath\PapyrusUtil\Scripts\Source",
     "$GamePath\Data\Scripts\Source", # SKSE, must come before vanilla
     "$GamePath\Data\Source\Scripts"  # vanilla
 ) -join ";"

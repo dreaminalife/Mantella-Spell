@@ -42,6 +42,15 @@ EndFunction
 int Function ACTION_NPC_INITIATIVE() global ; Someone nearby with a reason to talk walks up to the player. The same as the NPC Initiative hotkey
     return 13
 EndFunction
+int Function ACTION_CONVERSATION_EVENT() global ; Something happens in the conversation. See MantellaConversation.RequestConversationEvent
+    return 14
+EndFunction
+int Function ACTION_NEARBY_EVENT() global ; Something happens among the people nearby
+    return 15
+EndFunction
+int Function ACTION_RANDOM_EVENT() global ; Something happens that can involve anyone nearby
+    return 16
+EndFunction
 
 string Function COMPANIONS_KEY() global ; StorageUtil form list on the player, saved with the game
     return "Mantella_Companions"
@@ -82,28 +91,30 @@ Function Open(MantellaRepository repository) global
     UIMenuBase wheel = UIExtensions.GetMenu("UIWheelMenu", true)
     int[] actions = new int[8]
     int count = 0
+    ; The wheel's text fields are small: a label fits about 10 letters, the text below the wheel two short lines of about 10 letters.
+    ; Longer ones are shrunk to fit (MantellaRepository.FitWheelTexts), which gets hard to read, so they are kept short
     if !isRunning
         count = AddOption(wheel, actions, count, "Companions", "Talk to my companions", ACTION_TALK_TO_COMPANIONS())
-        count = AddOption(wheel, actions, count, "Say", "Say something to anyone nearby", ACTION_SAY_TO_ROOM())
+        count = AddOption(wheel, actions, count, "Say", "Say it to the room", ACTION_SAY_TO_ROOM())
         if target
             count = AddOption(wheel, actions, count, "Talk", "Talk to " + name, ACTION_TALK_TO_TARGET())
             if IsOnCompanionsList(target)
-                count = AddOption(wheel, actions, count, "Not companion", "Take " + name + " off my companions list", ACTION_TOGGLE_COMPANION())
+                count = AddOption(wheel, actions, count, "Companion", "Remove from companions", ACTION_TOGGLE_COMPANION())
             else
-                count = AddOption(wheel, actions, count, "Companion", "Put " + name + " on my companions list", ACTION_TOGGLE_COMPANION())
+                count = AddOption(wheel, actions, count, "Companion", "Add to companions", ACTION_TOGGLE_COMPANION())
             endIf
         endIf
-        count = AddOption(wheel, actions, count, "Event", "Something happens: start an NPC Event nearby", ACTION_START_NPC_EVENT())
-        count = AddOption(wheel, actions, count, "Approach", "Someone nearby with a reason to talk to me comes over", ACTION_NPC_INITIATIVE())
+        count = AddOption(wheel, actions, count, "NPC Event", "NPCs nearby act a scene", ACTION_START_NPC_EVENT())
+        count = AddOption(wheel, actions, count, "Approach", "Someone comes over", ACTION_NPC_INITIATIVE())
     else
         if isPlayerIn
-            count = AddOption(wheel, actions, count, "Interrupt", "Stop the NPCs and take my turn", ACTION_INTERRUPT())
+            count = AddOption(wheel, actions, count, "Interrupt", "Stop the NPCs", ACTION_INTERRUPT())
         elseIf conversation.IsNpcEvent()
             count = AddOption(wheel, actions, count, "Step in", "Step into the scene", ACTION_INTERRUPT())
         else
-            count = AddOption(wheel, actions, count, "Join", "Join the conversation", ACTION_JOIN())
+            count = AddOption(wheel, actions, count, "Join", "Join them", ACTION_JOIN())
         endIf
-        count = AddOption(wheel, actions, count, "End", "End the conversation", ACTION_END())
+        count = AddOption(wheel, actions, count, "End", "Stop talking", ACTION_END())
         if target
             if conversation.Participants.HasForm(target)
                 count = AddOption(wheel, actions, count, "Remove", "Send " + name + " away", ACTION_REMOVE_TARGET())
@@ -112,14 +123,17 @@ Function Open(MantellaRepository repository) global
             endIf
         endIf
         if isPlayerIn
-            count = AddOption(wheel, actions, count, "Companions", "Bring my companions in", ACTION_ADD_COMPANIONS())
-            if !conversation.IsNpcEvent() ; NPC Events keep their own rules for drawing people in
-                if conversation.IsShouting()
-                    count = AddOption(wheel, actions, count, "Private", "Nobody new joins", ACTION_PRIVATE())
-                else
-                    count = AddOption(wheel, actions, count, "Shout", "Anyone nearby can answer or join in", ACTION_SHOUT())
-                endIf
+            count = AddOption(wheel, actions, count, "Companions", "Add my companions", ACTION_ADD_COMPANIONS())
+            if conversation.IsShouting()
+                count = AddOption(wheel, actions, count, "Private", "Nobody new joins", ACTION_PRIVATE())
+            else
+                count = AddOption(wheel, actions, count, "Shout", "Anyone can join", ACTION_SHOUT())
             endIf
+            ; Conversation, Nearby and Random Event on the Events page. With these, the wheel can be full (8 options)
+            count = AddOption(wheel, actions, count, "Talk Event", "Something happens to us", ACTION_CONVERSATION_EVENT())
+            count = AddOption(wheel, actions, count, "Nearby Event", "Something happens nearby", ACTION_NEARBY_EVENT())
+            count = AddOption(wheel, actions, count, "Random Event", "Anything can happen", ACTION_RANDOM_EVENT())
+            conversation.StartEventScan() ; On another thread: who is nearby, in case Nearby or Random Event is picked
         endIf
     endIf
 
@@ -140,7 +154,7 @@ Function Open(MantellaRepository repository) global
 EndFunction
 
 ; Puts the option in the next free place of the wheel. The label is shown on the wheel, the text below it when the option is
-; pointed at. Labels longer than about 12 letters are cut off. Returns the new number of options
+; pointed at. Returns the new number of options
 int Function AddOption(UIMenuBase wheel, int[] actions, int count, string label, string text, int actionId) global
     int slot = SlotForOption(count)
     wheel.SetPropertyIndexString("optionLabelText", slot, label)
@@ -187,6 +201,12 @@ Function RunAction(int actionId, MantellaRepository repository, MantellaConversa
         endIf
     elseIf actionId == ACTION_PRIVATE()
         conversation.SetShout(false)
+    elseIf actionId == ACTION_CONVERSATION_EVENT()
+        conversation.RequestConversationEvent("conversation")
+    elseIf actionId == ACTION_NEARBY_EVENT()
+        conversation.RequestConversationEvent("nearby")
+    elseIf actionId == ACTION_RANDOM_EVENT()
+        conversation.RequestConversationEvent("random")
     endIf
 EndFunction
 

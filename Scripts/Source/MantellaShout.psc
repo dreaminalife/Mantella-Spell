@@ -6,11 +6,31 @@ float Function METER_UNITS() global ; Game units in a meter
     return 71.0210
 EndFunction
 
-; The nearest people within hearing distance who are free to talk and not in the conversation, at most Most People Listed, nearest first.
-; Followers are included. With Must Be in Sight, either the player sees them or they see the player
+; Who can join by shouting: the nearest people who are free to talk and not in the conversation, at most Most People Listed, nearest first.
+; While the player watches an NPC Event (it runs in Shout from the start), the NPC Event's rules decide (FindNearbyForNpcEvent).
+; Otherwise the Shout Mode page's: Hearing Distance, Include Followers and Must Be in Sight
 Actor[] Function FindNearby(MantellaRepository repository, MantellaConversation conversation) global
+    if IsWatchingNpcEvent(conversation)
+        return FindNearbyForNpcEvent(repository, conversation)
+    endIf
+    return FindNearbyWith(repository, conversation, repository.shoutHearingDistance, !repository.shoutExcludeFollowers, repository.shoutRequireLineOfSight, repository.shoutMaxListed)
+EndFunction
+
+; Who an NPC Event can be about, and who can join it while the player watches: within the NPC Event's Hearing Distance, followers only with
+; its Include Active Followers, at most the Shout Mode page's Most People Listed. Line of sight is not needed
+Actor[] Function FindNearbyForNpcEvent(MantellaRepository repository, MantellaConversation conversation) global
+    return FindNearbyWith(repository, conversation, repository.npcEventHearingDistance, repository.npcEventIncludeFollowers, false, repository.shoutMaxListed)
+EndFunction
+
+; The player is watching an NPC Event, not in it
+bool Function IsWatchingNpcEvent(MantellaConversation conversation) global
+    return conversation.IsRunning() && conversation.IsNpcEvent() && !conversation.IsPlayerInConversation()
+EndFunction
+
+; The nearest people within distanceMeters of the player who are free to talk and not in the conversation, at most maxCount (1 to 30), nearest first.
+; With requireLineOfSight, either the player sees them or they see the player
+Actor[] Function FindNearbyWith(MantellaRepository repository, MantellaConversation conversation, float distanceMeters, bool includeFollowers, bool requireLineOfSight, int maxCount) global
     Actor player = Game.GetPlayer()
-    int maxCount = repository.shoutMaxListed
     if maxCount < 1
         maxCount = 1
     elseIf maxCount > 30
@@ -21,11 +41,11 @@ Actor[] Function FindNearby(MantellaRepository repository, MantellaConversation 
     int count = 0
     ; ScanCellNPCs' own keyword filter misses keywords that come from the race, like ActorTypeNPC, so it is checked here
     Keyword actorTypeNPC = Keyword.GetKeyword("ActorTypeNPC")
-    Actor[] scanned = MiscUtil.ScanCellNPCs(player, repository.shoutHearingDistance * METER_UNITS())
+    Actor[] scanned = MiscUtil.ScanCellNPCs(player, distanceMeters * METER_UNITS())
     int i = 0
     while i < scanned.Length
         Actor npc = scanned[i]
-        if npc.HasKeyword(actorTypeNPC) && CanJoin(npc, repository, conversation)
+        if npc.HasKeyword(actorTypeNPC) && WhyCantJoinWith(npc, repository, conversation, distanceMeters, includeFollowers, requireLineOfSight) == ""
             count = MantellaWheel.InsertByDistance(found, distances, count, maxCount, npc, player.GetDistance(npc))
         endIf
         i += 1
@@ -39,25 +59,31 @@ Actor[] Function FindNearby(MantellaRepository repository, MantellaConversation 
     return result
 EndFunction
 
-; Free to talk, not in the conversation, within hearing distance and, with Must Be in Sight, in sight
-bool Function CanJoin(Actor npc, MantellaRepository repository, MantellaConversation conversation) global
-    return WhyCantJoin(npc, repository, conversation) == ""
+; Why the NPC can't join, or "" if they can, by the same rules as FindNearby. Sent to MantellaSoftware, which logs it, when the person
+; the Game Master picked can't be added
+string Function WhyCantJoin(Actor npc, MantellaRepository repository, MantellaConversation conversation) global
+    if IsWatchingNpcEvent(conversation)
+        return WhyCantJoinWith(npc, repository, conversation, repository.npcEventHearingDistance, repository.npcEventIncludeFollowers, false)
+    endIf
+    return WhyCantJoinWith(npc, repository, conversation, repository.shoutHearingDistance, !repository.shoutExcludeFollowers, repository.shoutRequireLineOfSight)
 EndFunction
 
-; Why the NPC can't join, or "" if they can. The same checks as CanJoin, stopping at the first that fails. Sent to MantellaSoftware,
-; which logs it, when the person the Game Master picked can't be added
-string Function WhyCantJoin(Actor npc, MantellaRepository repository, MantellaConversation conversation) global
+; Free to talk, not in the conversation, within distanceMeters, a follower only with includeFollowers and, with requireLineOfSight, in sight.
+; Stops at the first check that fails
+string Function WhyCantJoinWith(Actor npc, MantellaRepository repository, MantellaConversation conversation, float distanceMeters, bool includeFollowers, bool requireLineOfSight) global
     string reason = MantellaActorChecks.UnavailableReason(npc)
     if reason != ""
         return reason
     elseIf conversation.Participants.HasForm(npc)
         return "already in the conversation"
+    elseIf !includeFollowers && MantellaActorChecks.IsActiveFollower(npc, repository)
+        return "a follower (Include Followers is off)"
     endIf
     Actor player = Game.GetPlayer()
     float distance = player.GetDistance(npc)
-    if distance > repository.shoutHearingDistance * METER_UNITS()
+    if distance > distanceMeters * METER_UNITS()
         return "too far away (" + ((distance / METER_UNITS()) as int) + " m)"
-    elseIf repository.shoutRequireLineOfSight && !npc.HasLOS(player) && !player.HasLOS(npc)
+    elseIf requireLineOfSight && !npc.HasLOS(player) && !player.HasLOS(npc)
         return "out of sight"
     endIf
     return ""

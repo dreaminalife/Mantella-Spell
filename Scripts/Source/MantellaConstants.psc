@@ -54,10 +54,25 @@ string property KEY_REPLYTYPE_NPCEVENT = "mantella_npc_event_result" auto
 string property KEY_REPLYTYPE_NPCEVENT_ADDACTOR = "mantella_npc_event_add_actor" auto
 string property KEY_NPCEVENT_ID = "mantella_npc_event_id" auto
 string property KEY_NPCEVENT_PARTICIPANT_REFIDS = "mantella_npc_event_participant_refids" auto
-string property KEY_NPCEVENT_ADDACTOR_REFID = "mantella_npc_event_add_actor_refid" auto
-string property KEY_NPCEVENT_ADDFAILED_REFID = "mantella_npc_event_add_failed_refid" auto
-string property KEY_NPCEVENT_NEARBY_REFIDS = "mantella_npc_event_nearby_refids" auto
+string property KEY_NPCEVENT_ADDACTOR_REFID = "mantella_npc_event_add_actor_refid" auto ; Only the player watching: anyone else joins by Shout
+string property KEY_NPCEVENT_NEARBY_REFIDS = "mantella_npc_event_nearby_refids" auto ; In the check: everyone nearby, nearest first
+string property KEY_NPCEVENT_NEARBY_NAMES = "mantella_npc_event_nearby_names" auto ; In the same order as the refids
 string property KEY_NPCEVENT_PLAYERNOTICEABLE = "mantella_npc_event_player_noticeable" auto
+string property KEY_EVENT_HINT = "mantella_event_hint" auto ; What the player would like to happen (Ask for a Hint). Only for the event generator
+
+; Conversation, Nearby and Random Events (Conversation Wheel). Sent during the player's turn
+string property KEY_REQUESTTYPE_CONVERSATIONEVENT = "mantella_conversation_event" auto
+string property KEY_REPLYTYPE_CONVERSATIONEVENT = "mantella_conversation_event_result" auto
+string property KEY_EVENT_KIND = "mantella_event_kind" auto ; "conversation", "nearby" or "random". In an interrupt request: an event was picked, so a wait for the player to speak ends
+string property KEY_EVENT_SENDHISTORY = "mantella_event_send_history" auto
+string property KEY_EVENT_INCLUDEPLAYER = "mantella_event_include_player" auto
+string property KEY_EVENT_NEARBY_REFIDS = "mantella_event_nearby_refids" auto ; Nearby and Random: who the event can be about, nearest first
+string property KEY_EVENT_NEARBY_NAMES = "mantella_event_nearby_names" auto
+string property KEY_EVENT_NEARBY_ACTORS = "mantella_event_nearby_actors" auto ; Full actor settings of the nearest who are not in the conversation
+string property KEY_EVENT_MAXDESCRIBED = "mantella_event_max_described" auto
+string property KEY_EVENT_RESULT = "mantella_event_result" auto ; In the reply: true if something happened
+string property KEY_EVENT_CANCEL = "mantella_event_cancel" auto ; In an interrupt request: the player ended the conversation while the event was being generated
+string property KEY_GAMEMASTERMODE = "mantella_game_master_mode" auto ; In the start, continue and event replies
 
 ; Shout: sent with every continue and player input request. The rest only while the player shouts
 string property KEY_SHOUT_ENABLED = "mantella_shout_enabled" auto

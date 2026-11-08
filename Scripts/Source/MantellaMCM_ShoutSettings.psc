@@ -13,6 +13,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_shoutLinesBetweenJoins = mcm.AddSliderOption("Lines Between Joins", repository.shoutLinesBetweenJoins)
     mcm.oid_shoutMaxPeople = mcm.AddSliderOption("Most People in Conversation", repository.shoutMaxPeople)
     mcm.oid_shoutNewcomersRemember = mcm.AddTextOption("Newcomers Remember", NewcomersRememberLabel(repository.shoutNewcomersRemember))
+    mcm.oid_shoutIncludeFollowers = mcm.AddToggleOption("Include Followers", !repository.shoutExcludeFollowers)
     mcm.oid_showShoutMessages = mcm.AddToggleOption("Show Messages", repository.showShoutMessages)
 endfunction
 
@@ -22,6 +23,10 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_shoutMaxListed = mcm.AddSliderOption("Most People Listed", repository.shoutMaxListed)
     mcm.oid_shoutMaxCandidates = mcm.AddSliderOption("Most People Described", repository.shoutMaxCandidates)
     mcm.oid_shoutRequireLineOfSight = mcm.AddToggleOption("Must Be in Sight", repository.shoutRequireLineOfSight)
+    ; Nearby and Random Events (Events page) find the people nearby with these too
+    mcm.AddTextOption("Hearing Distance, Most People Listed and", "", mcm.OPTION_FLAG_DISABLED)
+    mcm.AddTextOption("Must Be in Sight are also used by", "", mcm.OPTION_FLAG_DISABLED)
+    mcm.AddTextOption("Nearby and Random Events", "", mcm.OPTION_FLAG_DISABLED)
 endfunction
 
 function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repository) global
@@ -72,6 +77,9 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     if optionID == mcm.oid_shoutRequireLineOfSight
         Repository.shoutRequireLineOfSight =! Repository.shoutRequireLineOfSight
         mcm.SetToggleOptionValue(optionID, Repository.shoutRequireLineOfSight)
+    elseIf optionID == mcm.oid_shoutIncludeFollowers
+        Repository.shoutExcludeFollowers =! Repository.shoutExcludeFollowers
+        mcm.SetToggleOptionValue(optionID, !Repository.shoutExcludeFollowers)
     elseIf optionID == mcm.oid_showShoutMessages
         Repository.showShoutMessages =! Repository.showShoutMessages
         mcm.SetToggleOptionValue(optionID, Repository.showShoutMessages)

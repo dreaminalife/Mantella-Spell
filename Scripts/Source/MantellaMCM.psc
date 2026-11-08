@@ -45,6 +45,21 @@ int property oid_npcEventRequireLineOfSight auto
 int property oid_npcEventIncludeFollowers auto
 int property oid_npcEventMaxCandidates auto
 int property oid_showNpcEventMessages auto
+int property oid_npcEventAskForHint auto
+
+int property oid_conversationEventAskForHint auto
+int property oid_conversationEventSendHistory auto
+int property oid_conversationEventIncludePlayer auto
+int property oid_nearbyEventAskForHint auto
+int property oid_nearbyEventSendHistory auto
+int property oid_nearbyEventIncludePlayer auto
+int property oid_nearbyEventMaxDescribed auto
+int property oid_nearbyEventIncludeFollowers auto
+int property oid_randomEventAskForHint auto
+int property oid_randomEventSendHistory auto
+int property oid_randomEventIncludePlayer auto
+int property oid_randomEventMaxDescribed auto
+int property oid_randomEventIncludeFollowers auto
 
 int property oid_shoutLinesBetweenJoins auto
 int property oid_shoutMaxPeople auto
@@ -54,6 +69,7 @@ int property oid_shoutMaxCandidates auto
 int property oid_shoutMaxListed auto
 int property oid_shoutRequireLineOfSight auto
 int property oid_shoutNewcomersRemember auto
+int property oid_shoutIncludeFollowers auto
 
 
 int property oid_playerCharacterDescription1 auto
@@ -137,7 +153,7 @@ string property PAGE_TARGETTRACKING = "Target Tracking" auto
 string property PAGE_EQUIPMENT = "Equipment" auto
 string property PAGE_ADVANCED = "Advanced" auto
 string property PAGE_NPCINITIATIVE = "NPC Initiative" auto
-string property PAGE_NPCEVENTS = "NPC Events" auto
+string property PAGE_EVENTS = "Events" autoReadonly ; Was the NPC Events page. Read-only, so a save keeps no old name
 string property PAGE_SHOUT = "Shout Mode" auto
 
 
@@ -150,7 +166,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 17
+    Return 18
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -159,10 +175,11 @@ event OnVersionUpdate(int a_version)
 EndEvent
 
 Event OnConfigOpen()
-    ; SkyUI's version update does not run on every save, so what versions 10, 12, 13, 15 and 16 added is also checked whenever the menu opens
-    if Pages.Length < 9
+    ; SkyUI's version update does not run on every save, so what versions 10, 12, 13, 15, 16 and 18 added is also checked whenever the menu opens
+    if Pages.Length < 9 || Pages[7] != PAGE_EVENTS
         OnConfigInit()
     endIf
+    repository.EnsureEventDefaults()
     if repository.shoutHearingDistance == 0 ; Never 0 once set: its slider starts at 5
         repository.assignDefaultSettings(14) ; Only assigns the defaults added in version 15 and later
     elseIf repository.shoutMaxListed == 0 ; Never 0 once set: its slider starts at 1
@@ -188,7 +205,7 @@ Event OnConfigInit()
     Pages[4] = PAGE_EQUIPMENT
  	Pages[5] = PAGE_ADVANCED
  	Pages[6] = PAGE_NPCINITIATIVE
- 	Pages[7] = PAGE_NPCEVENTS
+ 	Pages[7] = PAGE_EVENTS
  	Pages[8] = PAGE_SHOUT
  
     playerAllToggle=true
@@ -226,9 +243,9 @@ Event OnPageReset(string page)
 	elseif page==PAGE_NPCINITIATIVE
 		MantellaMCM_NPCInitiativeSettings.Render(self, repository)
 		MantellaMCMcurrentPage=PAGE_NPCINITIATIVE
-	elseif page==PAGE_NPCEVENTS
+	elseif page==PAGE_EVENTS
 		MantellaMCM_NPCEventSettings.Render(self, repository)
-		MantellaMCMcurrentPage=PAGE_NPCEVENTS
+		MantellaMCMcurrentPage=PAGE_EVENTS
 	elseif page==PAGE_SHOUT
 		MantellaMCM_ShoutSettings.Render(self, repository)
 		MantellaMCMcurrentPage=PAGE_SHOUT
@@ -251,7 +268,7 @@ Event OnOptionSelect(int optionID)
 		MantellaMCM_AdvancedSettings.OptionUpdate(self,optionID, repository)
 	elseif MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE
 		MantellaMCM_NPCInitiativeSettings.OptionUpdate(self,optionID, repository)
-	elseif MantellaMCMcurrentPage ==PAGE_NPCEVENTS
+	elseif MantellaMCMcurrentPage ==PAGE_EVENTS
 		MantellaMCM_NPCEventSettings.OptionUpdate(self,optionID, repository)
 	elseif MantellaMCMcurrentPage ==PAGE_SHOUT
 		MantellaMCM_ShoutSettings.OptionUpdate(self,optionID, repository)
@@ -269,7 +286,7 @@ Event OnOptionSliderOpen(Int optionId)
         MantellaMCM_AdvancedSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
         MantellaMCM_NPCInitiativeSettings.SliderOptionOpen(self,optionID, repository)
-    elseif MantellaMCMcurrentPage == PAGE_NPCEVENTS
+    elseif MantellaMCMcurrentPage == PAGE_EVENTS
         MantellaMCM_NPCEventSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_SHOUT
         MantellaMCM_ShoutSettings.SliderOptionOpen(self,optionID, repository)
@@ -287,7 +304,7 @@ Event OnOptionSliderAccept(Int optionId, Float value)
         MantellaMCM_AdvancedSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_NPCINITIATIVE
         MantellaMCM_NPCInitiativeSettings.SliderOptionAccept(self,optionID, value, repository)
-    elseif MantellaMCMcurrentPage == PAGE_NPCEVENTS
+    elseif MantellaMCMcurrentPage == PAGE_EVENTS
         MantellaMCM_NPCEventSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_SHOUT
         MantellaMCM_ShoutSettings.SliderOptionAccept(self,optionID, value, repository)
@@ -296,7 +313,7 @@ EndEvent
 
 Event OnOptionKeyMapChange(Int a_option, Int a_keyCode, String a_conflictControl, String a_conflictName)
     {Called when a key has been remapped}
-    If 	MantellaMCMcurrentPage ==PAGE_GENERAL || MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE || MantellaMCMcurrentPage ==PAGE_NPCEVENTS ; The NPC Initiative and NPC Event hotkeys use the same conflict check
+    If 	MantellaMCMcurrentPage ==PAGE_GENERAL || MantellaMCMcurrentPage ==PAGE_NPCINITIATIVE || MantellaMCMcurrentPage ==PAGE_EVENTS ; The NPC Initiative and NPC Event hotkeys use the same conflict check
 		MantellaMCM_GeneralSettings.KeyMapChange(self,a_option, a_keyCode, a_conflictControl, a_conflictName, repository)
 	EndIf
 EndEvent
@@ -332,7 +349,7 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_keymapInterruptHotkey
 		SetInfoText("Stops the NPCs mid-response and gives you the turn. Then reply with the Open Text Prompt hotkey or the mic.")
 	elseIf optionID == oid_keymapWheelHotkey
-		SetInfoText("Opens a wheel with the options that make sense right now: talk to your companions or the person you're looking at, interrupt, start an NPC Event, end the conversation. Companions are your followers plus anyone you add from the wheel.")
+		SetInfoText("Opens a wheel with the options that make sense right now: talk to your companions or the person you're looking at, interrupt, start an NPC Event, make something happen in the conversation (Events page), end the conversation. Companions are your followers plus anyone you add from the wheel.")
 
     elseIf optionID == oid_showDialogueItems	
 		SetInfoText("Show the dialogue tree entries to start a conversation or add and remove NPCs from it.")
@@ -378,17 +395,34 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_npcEventFrequency
 		SetInfoText("How often (in real minutes) a new scene is attempted, when no conversation is running. \nDefault: 20")
 	elseIf optionID == oid_npcEventHearingDistance
-		SetInfoText("How far from you (in meters) NPCs can be to take part or be drawn in. A scene you have not joined ends once you are farther than this from everyone in it, and you can only be noticed within this distance. \nDefault: 20")
+		SetInfoText("How far from you (in meters) NPCs can be to be in the scene: written about by the event generator, or drawn in while you watch. A scene you have not joined ends once you are farther than this from everyone in it, and you can only be noticed within this distance. \nDefault: 20")
 	elseIf optionID == oid_npcEventRequireLineOfSight
 		SetInfoText("Off: the NPCs in a scene can notice you whenever you are within Hearing Distance and not sneaking. On: you or one of them must also be able to see the other. \nDefault: Off")
 	elseIf optionID == oid_npcEventIncludeFollowers
-		SetInfoText("Lets your active followers take part in scenes and be drawn into them. A follower stays with you, so a scene they are in does not end when you walk away. \nDefault: Off")
+		SetInfoText("Whether your active followers can be in the scene while you watch: written about by the event generator, and drawn in by the Game Master. A follower stays with you, so a scene they are in would not end when you walk away. Once you step in, the Shout Mode page's Include Followers decides. \nDefault: Off")
 	elseIf optionID == oid_npcEventMaxCandidates
-		SetInfoText("How many of the nearest NPCs the scene is invented from. The ones not in it can be drawn in later. \nDefault: 6")
+		SetInfoText("How many of the nearest people the event generator gets the bios and memories of. It knows everyone else nearby by name (up to the Shout Mode page's Most People Listed). \nDefault: 6")
 	elseIf optionID == oid_showNpcEventMessages
 		SetInfoText("Enable NPC Event debugging messages.")
 	elseIf optionID == oid_keymapNpcEventHotkey
-		SetInfoText("Attempts a scene right away. Works even when NPC Events are turned off, and ignores Frequency.")
+		SetInfoText("Attempts a scene right away. Works even when NPC Events are turned off, and ignores Frequency. NPC Event on the Conversation Wheel does the same.")
+	elseIf optionID == oid_npcEventAskForHint
+		SetInfoText("When you start an NPC Event yourself (hotkey or Conversation Wheel), a text box asks what you'd like to happen, e.g. 'a thief grabs her purse'. Cancel it or leave it empty for a surprise. Scenes that start by themselves never ask. \nDefault: Off")
+
+	elseIf optionID == oid_conversationEventAskForHint || optionID == oid_nearbyEventAskForHint || optionID == oid_randomEventAskForHint
+		SetInfoText("When you pick the event on the Conversation Wheel, a text box asks what you'd like to happen, e.g. 'a thief grabs her purse'. Cancel it or leave it empty for a surprise. Only the event generator sees it. \nDefault: Off")
+	elseIf optionID == oid_conversationEventSendHistory || optionID == oid_randomEventSendHistory
+		SetInfoText("The event generator also gets the recent lines of the conversation, the same ones the Game Master sees. \nDefault: On")
+	elseIf optionID == oid_nearbyEventSendHistory
+		SetInfoText("The event generator also gets the recent lines of the conversation, the same ones the Game Master sees. \nDefault: Off")
+	elseIf optionID == oid_conversationEventIncludePlayer || optionID == oid_randomEventIncludePlayer
+		SetInfoText("You're in the names the event generator gets, so the event can happen to you. It never writes what you do, say or feel. \nDefault: On")
+	elseIf optionID == oid_nearbyEventIncludePlayer
+		SetInfoText("You're in the names the event generator gets, so the event can happen to you. It never writes what you do, say or feel. \nDefault: Off")
+	elseIf optionID == oid_nearbyEventMaxDescribed || optionID == oid_randomEventMaxDescribed
+		SetInfoText("How many of the nearest people the event generator gets the bios and memories of. It knows everyone else nearby by name. Who counts as nearby comes from the Shout Mode page (Hearing Distance, Must Be in Sight, Most People Listed). \nDefault: 6")
+	elseIf optionID == oid_nearbyEventIncludeFollowers || optionID == oid_randomEventIncludeFollowers
+		SetInfoText("Whether the event generator may write about your followers nearby who aren't in the conversation. Whether they can join afterwards is up to the Shout Mode page's Include Followers. \nDefault: Off")
 
 	elseIf optionID == oid_shoutLinesBetweenJoins
 		SetInfoText("After someone joins by shouting, how many lines must be spoken before the next person can join. \nDefault: 3")
@@ -404,6 +438,8 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("How many of the nearest people the Game Master can pick from, by name. Call someone by name and they can answer, even from across the room. \nDefault: 30")
 	elseIf optionID == oid_shoutRequireLineOfSight
 		SetInfoText("Off: everyone within Hearing Distance can join. On: they also need to be in sight. Either you can see them or they can see you. \nDefault: Off")
+	elseIf optionID == oid_shoutIncludeFollowers
+		SetInfoText("Whether your active followers nearby can join by shouting. Nearby and Random Events have their own Include Followers for what the event is written about. \nDefault: On")
 	elseIf optionID == oid_shoutNewcomersRemember
 		SetInfoText("Click to change what someone who joins by shouting remembers. Since Shout: what was said since you started shouting. Last Line: your last line and the replies to it. Everything: the whole conversation. \nDefault: Since Shout")
 

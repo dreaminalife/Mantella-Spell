@@ -25,6 +25,8 @@ String[] _ingameEvents
 String[] _flushedEvents ; The events moved into the last built context, put back if that context is never sent
 String[] _extraRequestActions
 int[] _actorHandles = None
+Form[] _actorHandleActors ; Who each of _actorHandles is for, in the same order
+Form[] _staleActors ; Were in the conversation before the last join or leave: their actor settings are built again by RefreshStaleActors
 bool _actorsUpdated = false
 int _contextHandle = 0
 bool _does_accept_player_input = false
@@ -42,10 +44,8 @@ string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
 bool _npcInitiative = false
 int _npcEventId = 0 ; The NPC Event the conversation acts out. 0 for any other conversation
-int[] _npcEventNearbyRefids
 bool _npcEventPlayerNoticeable = false
 bool _hasNpcEventMonitorValues = false ; Set once MantellaListenerScript has checked the scene
-int _npcEventAddFailedRefid = 0
 bool _sendQuestChecksCatchUp = false ; Set when the start reply brought a new quest check list: fresh answers go with the next continue request
 bool _isGroupStart = false ; The next conversation may start with more than one NPC (Talk to my companions in the Conversation Wheel)
 bool _isShouting = false ; Shout (Conversation Wheel): anyone nearby can answer or join in. See MantellaShout
@@ -54,6 +54,8 @@ int[] _shoutNearbyRefids ; Start with a 0 and an empty name, so they are never e
 string[] _shoutNearbyNames
 string _shoutNearbyShown = "" ; The names last shown with Show Messages
 Form[] _shoutSentActors ; The people nearby whose full actor settings were sent, so the server has their bios and memories
+int[] _shoutSentHandles ; Their actor settings, in the same order. Someone who then joins uses them instead of being built again
+bool _isShoutNearbyByShoutRules = false ; _shoutNearby was found with the Shout Mode page's rules, so a Nearby or Random Event can use it instead of scanning
 int _shoutAddFailedRefid = 0
 string _shoutAddFailedReason = "" ; Why the person picked could not be added. Sent with the refid
 bool _isRoomStart = false ; The next conversation starts with only the player, who says something to the room (Just saying something)
@@ -64,8 +66,41 @@ int _roomScanId = 0 ; Counts the room scans asked for. Cancelling the text box, 
 int _roomScanStartedId = 0 ; The last room scan that began running
 int _roomScanDoneId = 0 ; The last room scan that finished
 Actor[] _roomScanNearby ; What the last finished room scan found
-Form[] _prebuiltActors ; People nearby whose full actor settings the room scan built while the player typed
+Form[] _prebuiltActors ; People nearby whose full actor settings the room scan built while the player typed, or the NPC Event check built
 int[] _prebuiltHandles ; Their actor settings, used by the start instead of building them again
+Actor[] _npcEventNearby ; Who the NPC Event check found nearby, so the start doesn't scan again
+bool _isRoomConversation = false ; Started by saying something to the room. Never an event conversation, so Private works as for any Shout
+bool _isGameMasterMode = false ; From MantellaSoftware's replies. Conversation, Nearby and Random Events need it
+string _pendingEventKind = "" ; A Conversation, Nearby or Random Event picked on the wheel, until its result arrives. "" for none
+string _pendingEventHint = ""
+bool _isEventHintDone = false ; The hint was typed or cancelled, or not asked for
+bool _isEventTurn = false ; It is the player's turn, so the event can be sent
+bool _isEventSent = false
+Actor[] _eventNearby ; Nearby and Random: who the event can be about, nearest first
+Form[] _eventSentActors ; The people nearby sent in full with the event
+int[] _eventSentHandles ; Their actor settings, in the same order
+int _eventBuildId = 0 ; Counts the event builds asked for (StartEventBuild). The event ending changes it, so its build stops and the result is unused
+int _eventBuildStartedId = 0 ; The last event build that began running
+int _eventBuildDoneId = 0 ; The last event build whose people for the event itself are built
+int _eventBuildAllDoneId = 0 ; The last event build whose people for Shout are built too
+int _eventScanId = 0 ; Counts the searches started when the wheel opens (StartEventScan). A newer one changes it, so an older one's result is unused
+int _eventScanSentId = 0 ; The last search asked for. A newer _eventScanId was never asked for, so there is nothing to wait for
+int _eventScanStartedId = 0 ; The last search that began running
+int _eventScanDoneId = 0 ; The last search that finished
+Actor[] _eventScanNearby ; What the last finished search found: the people nearby, nearest first
+bool _eventScanHasFollowers = false ; Whether that search included the active followers
+float _eventScanTime = 0.0 ; When it finished, in real time
+Form[] _eventPrebuiltActors ; People the pending event is about, built while the NPCs finished their line and the player typed the hint
+int[] _eventPrebuiltHandles ; Their actor settings, in the same order
+bool _isAfterEvent = false ; A Nearby or Random Event happened. With an NPC Event the player is in, it makes this an event conversation (see SetShout)
+Form[] _shoutJoiners ; Who joined by shouting and is still in the conversation. Kept when Shout is switched off
+
+; Never assigned, so always None: arrays are cleared with these. Assigning None to an array fails in the game ("Cannot cast from None to
+; Actor[]"), and a local array declared "= None" then can't take an array at all, so it stays None
+Actor[] _noActors
+Form[] _noForms
+int[] _noInts
+string[] _noStrings
 
 event OnInit()
     RegisterForConversationEvents()
@@ -83,10 +118,20 @@ Function RegisterForConversationEvents()
     RegisterForModEvent(EventInterface.EVENT_ACTIONS_PREFIX + mConsts.ACTION_REMOVECHARACTER,"OnRemoveCharacterActionReceived")
     RegisterForModEvent(EventInterface.EVENT_ADD_EVENT,"OnAddEventReceived")
     RegisterForModEvent(ROOM_SCAN_EVENT(),"OnRoomScan")
+    RegisterForModEvent(EVENT_BUILD_EVENT(),"OnEventBuild")
+    RegisterForModEvent(EVENT_SCAN_EVENT(),"OnEventScan")
 EndFunction
 
 string Function ROOM_SCAN_EVENT() global
     return "Mantella_RoomScan"
+EndFunction
+
+string Function EVENT_BUILD_EVENT() global
+    return "Mantella_EventBuild"
+EndFunction
+
+string Function EVENT_SCAN_EVENT() global
+    return "Mantella_EventScan"
 EndFunction
 
 event OnUpdate()
@@ -123,6 +168,14 @@ Function SetNpcEvent(int eventId)
     _npcEventId = eventId
 EndFunction
 
+; What the NPC Event check found and built moments ago: who is nearby, nearest first, and the actor settings of the nearest.
+; The start uses them instead of scanning and building again, which took long in a crowded place
+Function SetNpcEventScan(Actor[] nearby, Form[] builtActors, int[] builtHandles)
+    _npcEventNearby = nearby
+    _prebuiltActors = builtActors
+    _prebuiltHandles = builtHandles
+EndFunction
+
 bool Function IsNpcEvent()
     return _npcEventId != 0
 EndFunction
@@ -132,23 +185,40 @@ bool Function IsEnding()
     return _hasBeenStopped
 EndFunction
 
-; Sent with every continue request of an NPC Event: who is still near the scene, and whether the player can be noticed
-Function SetNpcEventMonitorValues(int[] nearbyRefids, bool playerNoticeable)
-    _npcEventNearbyRefids = nearbyRefids
+; It is the player's turn: the game waits for the text box or the push-to-talk key. Used by the in-game test (MantellaEventTest)
+bool Function IsPlayersTurn()
+    return _does_accept_player_input
+EndFunction
+
+; How many NPC lines have arrived from MantellaSoftware. Used by the in-game test (MantellaEventTest) to pick an event while one is spoken
+int _npcLinesReceived = 0
+int Function NpcLinesReceived()
+    return _npcLinesReceived
+EndFunction
+
+; The people the last Nearby or Random Event that happened sent in full, nearest first. Used by the in-game test (MantellaEventTest)
+Form[] _lastEventSentActors
+Form[] Function LastEventSentActors()
+    return _lastEventSentActors
+EndFunction
+
+; A Conversation, Nearby or Random Event was picked and its result has not arrived yet
+bool Function IsEventPending()
+    return _pendingEventKind != ""
+EndFunction
+
+; Sent with every continue request of an NPC Event: whether the player can be noticed. Who is nearby goes with the Shout values,
+; as the scene runs in Shout from the start
+Function SetNpcEventMonitorValues(bool playerNoticeable)
     _npcEventPlayerNoticeable = playerNoticeable
     _hasNpcEventMonitorValues = true
 EndFunction
 
-; The server picked someone near the scene. They join before they speak
+; The server picked the player watching the scene. They join before anyone speaks again. People nearby join by Shout (AddShoutActor)
 Function AddNpcEventActor(Actor actorToAdd)
     Actor[] actors = new Actor[1]
     actors[0] = actorToAdd
     AddActors(actors)
-    RequestContinueConversation()
-EndFunction
-
-Function NpcEventActorCouldNotBeAdded(int refid)
-    _npcEventAddFailedRefid = refid
     RequestContinueConversation()
 EndFunction
 
@@ -163,15 +233,18 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     string roomLine = _roomLine
     _roomLine = ""
     Actor[] roomNearby = _roomNearby
-    _roomNearby = None
+    _roomNearby = _noActors
+    Actor[] npcEventNearby = _npcEventNearby
+    _npcEventNearby = _noActors
     _isRoomFirstTurn = false
-    if !isRoomStart
-        ClearPrebuiltActors() ; Only a room start uses them
+    if !isRoomStart && !IsNpcEvent()
+        ClearPrebuiltActors() ; Only a room start and an NPC Event use them
     endIf
     _hasNpcEventMonitorValues = false
-    _npcEventAddFailedRefid = 0
     _sendQuestChecksCatchUp = false
     ClearShout()
+    _actorHandleActors = _noForms ; Everyone is built fresh, or taken from _prebuiltActors
+    _staleActors = _noForms
     if(actorsToStartConversationWith.Length > 2 && !IsNpcEvent() && !isGroupStart) ; An NPC Event or a group start can start with more people
         Debug.Notification("Cannot start conversation. Conversation is already running.")
         return
@@ -205,11 +278,26 @@ function StartConversation(Actor[] actorsToStartConversationWith)
         ; Starts already shouting, so MantellaSoftware starts it as a Shout conversation and its Game Master decides whether anyone answers
         _isShouting = true
         _shoutSentActors = Utility.CreateFormArray(0)
+        _shoutSentHandles = Utility.CreateIntArray(0)
         SetShoutNearby(roomNearby) ; Found just before by MantellaShout.SayToRoom. Scanning again would delay the start
         AddShoutValues(handle) ; Uses the actor settings the room scan built while the player typed
         _roomLine = roomLine
         _isRoomFirstTurn = true
+        _isRoomConversation = true
         ClearPrebuiltActors() ; Built while the player typed. Later requests build them fresh
+    elseIf IsNpcEvent()
+        ; An NPC Event runs in Shout from the start, so its Game Master can draw in anyone nearby. While the player watches,
+        ; MantellaShout finds them with the NPC Event's rules. Sent with the start, so people who join heard the whole scene
+        _isShouting = true
+        _shoutSentActors = Utility.CreateFormArray(0)
+        _shoutSentHandles = Utility.CreateIntArray(0)
+        if npcEventNearby
+            SetShoutNearby(NotInConversation(npcEventNearby)) ; Found by the NPC Event check moments ago. Scanning again would delay the start
+        else
+            RefreshShoutNearby()
+        endIf
+        AddShoutValues(handle) ; Uses the actor settings the check built
+        ClearPrebuiltActors() ; Later requests build them fresh
     endIf
 
     if repository.microphoneEnabled
@@ -297,6 +385,9 @@ function ContinueConversation(string nextAction, int handle)
         ClearShout()
         Debug.Notification("Shout needs the Game Master model. Set it up in Mantella's settings")
     endIf
+    if SKSE_HTTP.hasKey(handle, mConsts.KEY_GAMEMASTERMODE) ; In the start, continue and event replies. It can change mid-conversation
+        _isGameMasterMode = SKSE_HTTP.getBool(handle, mConsts.KEY_GAMEMASTERMODE, false)
+    endIf
     if(nextAction == mConsts.KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED)
         _hasBeenStopped = false
         if(SKSE_HTTP.hasKey(handle,mConsts.KEY_STARTCONVERSATION_USENARRATOR))
@@ -312,29 +403,22 @@ function ContinueConversation(string nextAction, int handle)
         ;Debug.Notification("Conversation started.")
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCTALK)
+        _npcLinesReceived += 1
         ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to realise NPC needs to respond", 2)
         int npcTalkHandle = SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_REPLYTYPE_NPCTALK)
         ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to get NPC talk handle", 2)
         ProcessNpcSpeak(npcTalkHandle)
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_PLAYERTALK)
-        _does_accept_player_input = True
-        If (_isRoomFirstTurn)
-            ; The player asked to say something to the room: what they typed is sent now, or the microphone starts listening
-            _isRoomFirstTurn = false
-            string line = _roomLine
-            _roomLine = ""
-            If (line != "")
-                _does_accept_player_input = False
-                sendRequestForPlayerInput(line, updateContext=True)
-            Else
-                sendRequestForVoiceTranscribe()
-            EndIf
-        ElseIf (repository.microphoneEnabled && !repository.useHotkeyToStartMic)
-            sendRequestForVoiceTranscribe()
+        If (_pendingEventKind != "")
+            ; An event was picked: it is sent now, in the player's turn, instead of listening to the player
+            _isEventTurn = true
+            TrySendPendingEvent()
         Else
-            ShowRepeatingMessage("Awaiting player input...")
+            GivePlayerTheTurn()
         EndIf
+    elseIf(nextAction == mConsts.KEY_REPLYTYPE_CONVERSATIONEVENT)
+        OnConversationEventResult(handle)
     elseIf (nextAction == mConsts.KEY_REQUESTTYPE_TTS)
         ClearRepeatingMessage()
         string transcribe = SKSE_HTTP.getString(handle, mConsts.KEY_TRANSCRIBE, "*Complete gibberish*")
@@ -352,6 +436,27 @@ function ContinueConversation(string nextAction, int handle)
         CleanupConversation()
     endIf
 endFunction
+
+; The player's turn: what they typed to say to the room is sent, the microphone starts listening, or the game waits for the text box
+Function GivePlayerTheTurn()
+    _does_accept_player_input = True
+    If (_isRoomFirstTurn)
+        ; The player asked to say something to the room: what they typed is sent now, or the microphone starts listening
+        _isRoomFirstTurn = false
+        string line = _roomLine
+        _roomLine = ""
+        If (line != "")
+            _does_accept_player_input = False
+            sendRequestForPlayerInput(line, updateContext=True)
+        Else
+            sendRequestForVoiceTranscribe()
+        EndIf
+    ElseIf (repository.microphoneEnabled && !repository.useHotkeyToStartMic)
+        sendRequestForVoiceTranscribe()
+    Else
+        ShowRepeatingMessage("Awaiting player input...")
+    EndIf
+EndFunction
 
 function RequestContinueConversation()
     if(!_hasBeenStopped)    
@@ -379,15 +484,8 @@ function RequestContinueConversation()
             _actorsUpdated = false
         endIf
 
-        if IsNpcEvent()
-            if _hasNpcEventMonitorValues
-                SKSE_HTTP.setIntArray(handle, mConsts.KEY_NPCEVENT_NEARBY_REFIDS, _npcEventNearbyRefids)
-                SKSE_HTTP.setBool(handle, mConsts.KEY_NPCEVENT_PLAYERNOTICEABLE, _npcEventPlayerNoticeable)
-            endIf
-            if _npcEventAddFailedRefid != 0
-                SKSE_HTTP.setInt(handle, mConsts.KEY_NPCEVENT_ADDFAILED_REFID, _npcEventAddFailedRefid)
-                _npcEventAddFailedRefid = 0
-            endIf
+        if IsNpcEvent() && _hasNpcEventMonitorValues
+            SKSE_HTTP.setBool(handle, mConsts.KEY_NPCEVENT_PLAYERNOTICEABLE, _npcEventPlayerNoticeable)
         endIf
 
         AddShoutValues(handle)
@@ -578,7 +676,7 @@ EndFunction
 
 Actor[] Function GetRoomScanResult()
     Actor[] nearby = _roomScanNearby
-    _roomScanNearby = None
+    _roomScanNearby = _noActors
     return nearby
 EndFunction
 
@@ -616,40 +714,158 @@ Event OnRoomScan(int scanId)
 EndEvent
 
 Function ClearPrebuiltActors()
-    _prebuiltActors = None
-    _prebuiltHandles = None
+    _prebuiltActors = _noForms
+    _prebuiltHandles = _noInts
 EndFunction
 
 ; On: anyone nearby can answer or join in. Off (Private): nobody new joins. Everyone already in the conversation stays, the people who joined by
-; shouting too. MantellaSoftware learns about it with the next request
+; shouting too, except in an event conversation (IsEventConversation): there they leave, once the player says yes in a list menu.
+; MantellaSoftware learns about it with the next request
 Function SetShout(bool isOn)
     if isOn == _isShouting || !IsRunning()
+        return
+    endIf
+    if _pendingEventKind != "" ; Its result can switch Shout on, which would undo Private
+        Debug.Notification("Wait for the event first")
         return
     endIf
     if isOn
         _isShouting = true
         _shoutSentActors = Utility.CreateFormArray(0)
+        _shoutSentHandles = Utility.CreateIntArray(0)
         RefreshShoutNearby()
         Debug.Notification("Shouting: anyone nearby can answer or join in")
         return
     endIf
+    Actor[] leaving
+    if IsEventConversation()
+        leaving = ShoutJoinersInConversation()
+        if leaving && leaving.Length > 0
+            if !ConfirmPrivate(leaving)
+                return ; No: keeps shouting
+            endIf
+            ; The conversation went on while the menu was open: it may have ended, or someone may have joined or left
+            if !IsRunning() || _hasBeenStopped || !_isShouting
+                return
+            endIf
+            leaving = ShoutJoinersInConversation() ; Everyone who joined by shouting leaves, so only the people named as staying stay
+        endIf
+    endIf
     ClearShout()
-    if Participants.GetSize() < 2
+    if leaving && leaving.Length > 0
+        RemoveActors(leaving) ; Ends the conversation if nobody else is left
+        if Participants.GetSize() >= 2
+            Debug.Notification("Private: nobody new joins")
+        endIf
+    elseIf Participants.GetSize() < 2
         EndConversation() ; The player said something to the room and nobody has joined yet
     else
         Debug.Notification("Private: nobody new joins")
     endIf
 EndFunction
 
+; After a Nearby or Random Event, or in an NPC Event the player stepped into. Never a conversation started by saying something to the room
+bool Function IsEventConversation()
+    return !_isRoomConversation && (_isAfterEvent || IsNpcEvent())
+EndFunction
+
+; The people who joined by shouting and are still in the conversation. Not the people the conversation started with, nor anyone the player
+; brought in themselves (Talk / Add, Companions, the spell)
+Actor[] Function ShoutJoinersInConversation()
+    int count = 0
+    if _shoutJoiners
+        count = _shoutJoiners.Length
+    endIf
+    Actor[] found = PapyrusUtil.ActorArray(count)
+    int foundCount = 0
+    int i = 0
+    while i < count
+        Actor npc = _shoutJoiners[i] as Actor
+        if npc && Participants.HasForm(npc)
+            found[foundCount] = npc
+            foundCount += 1
+        endIf
+        i += 1
+    endWhile
+    Actor[] result = PapyrusUtil.ActorArray(foundCount)
+    i = 0
+    while i < foundCount
+        result[i] = found[i]
+        i += 1
+    endWhile
+    return result
+EndFunction
+
+; Asks before the people who joined by shouting are sent away. Closing the menu counts as no.
+; The list menu cuts long lines, so the full explanation goes in a message box first, which wraps its text. It only has an OK button,
+; so a short Yes / No list follows once it is closed
+bool Function ConfirmPrivate(Actor[] leaving)
+    int count = Participants.GetSize()
+    Actor[] staying = PapyrusUtil.ActorArray(count)
+    int stayingCount = 0
+    int i = 0
+    while i < count
+        Actor npc = Participants.GetAt(i) as Actor
+        if npc && npc != PlayerRef && leaving.Find(npc) < 0
+            staying[stayingCount] = npc
+            stayingCount += 1
+        endIf
+        i += 1
+    endWhile
+    string text = "Go private?\n\nIf you do, " + NamesText(leaving, leaving.Length) + Verb(" leave", leaving.Length) + " the conversation"
+    if stayingCount > 0
+        text += ", and only " + NamesText(staying, stayingCount) + Verb(" stay", stayingCount) + "."
+    else
+        text += ", and the conversation ends."
+    endIf
+    Debug.MessageBox(text)
+    Utility.Wait(0.1) ; Doesn't count time while a menu is open, so this returns once the message box is closed
+    UIListMenu menu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
+    menu.AddEntryItem("Yes, go private")
+    menu.AddEntryItem("No, keep shouting")
+    menu.OpenMenu()
+    return menu.GetResultInt() == 0
+EndFunction
+
+; The names of the first count actors: "Hulda", "Hulda and Mikael", "Hulda, Mikael and Lydia"
+string Function NamesText(Actor[] actors, int count)
+    string names = ""
+    int i = 0
+    while i < count
+        names = AddToNames(names, actors[i].GetDisplayName(), i == count - 1)
+        i += 1
+    endWhile
+    return names
+EndFunction
+
+; " leave" for several people, " leaves" for one
+string Function Verb(string plural, int count)
+    if count == 1
+        return plural + "s"
+    endIf
+    return plural
+EndFunction
+
+string Function AddToNames(string names, string name, bool isLast)
+    if names == ""
+        return name
+    elseIf isLast
+        return names + " and " + name
+    endIf
+    return names + ", " + name
+EndFunction
+
 Function ClearShout()
     _isShouting = false
-    _shoutNearby = None
-    _shoutNearbyRefids = None
-    _shoutNearbyNames = None
+    _shoutNearby = _noActors
+    _shoutNearbyRefids = _noInts
+    _shoutNearbyNames = _noStrings
     _shoutNearbyShown = ""
-    _shoutSentActors = None
+    _shoutSentActors = _noForms
+    _shoutSentHandles = _noInts
     _shoutAddFailedRefid = 0
     _shoutAddFailedReason = ""
+    _isShoutNearbyByShoutRules = false
 EndFunction
 
 ; Finds who is nearby now. Called when Shout is switched on and on every tick of MantellaListenerScript, so requests only attach the last list
@@ -657,11 +873,14 @@ Function RefreshShoutNearby()
     if !_isShouting
         return
     endIf
+    bool byShoutRules = !MantellaShout.IsWatchingNpcEvent(self) ; As FindNearby decides it
     SetShoutNearby(MantellaShout.FindNearby(repository, self))
+    _isShoutNearbyByShoutRules = byShoutRules
 EndFunction
 
 ; Keeps who is nearby, so requests attach it. Slow to work out: each check on a person in Papyrus waits for a frame
 Function SetShoutNearby(Actor[] nearby)
+    _isShoutNearbyByShoutRules = false ; Unless RefreshShoutNearby found it
     if !nearby
         nearby = PapyrusUtil.ActorArray(0)
     endIf
@@ -712,16 +931,21 @@ Function AddShoutValues(int handle)
     SKSE_HTTP.setIntArray(handle, mConsts.KEY_SHOUT_NEARBY_REFIDS, refids)
     SKSE_HTTP.setStringArray(handle, mConsts.KEY_SHOUT_NEARBY_NAMES, names)
     AddNewShoutActors(handle, nearby)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_LINESBETWEENJOINS, repository.shoutLinesBetweenJoins)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXPEOPLE, repository.shoutMaxPeople)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXDESCRIBED, repository.shoutMaxCandidates)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_NEWCOMERSREMEMBER, repository.shoutNewcomersRemember)
+    AddShoutSettings(handle)
     if _shoutAddFailedRefid != 0
         SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_ADDFAILED_REFID, _shoutAddFailedRefid)
         SKSE_HTTP.setString(handle, mConsts.KEY_SHOUT_ADDFAILED_REASON, _shoutAddFailedReason)
         _shoutAddFailedRefid = 0
         _shoutAddFailedReason = ""
     endIf
+EndFunction
+
+; The Shout Mode page's settings. Also sent by a Nearby or Random Event while Shout is off, as MantellaSoftware switches it on with the event
+Function AddShoutSettings(int handle)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_LINESBETWEENJOINS, repository.shoutLinesBetweenJoins)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXPEOPLE, repository.shoutMaxPeople)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXDESCRIBED, repository.shoutMaxCandidates)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_NEWCOMERSREMEMBER, repository.shoutNewcomersRemember)
 EndFunction
 
 ; The full actor settings of the nearest people (Most People Described) who were not sent yet. The server puts their bios and memories in the Game Master's prompt.
@@ -739,6 +963,7 @@ Function AddNewShoutActors(int handle, Actor[] nearby)
     endIf
     if !_shoutSentActors
         _shoutSentActors = Utility.CreateFormArray(0)
+        _shoutSentHandles = Utility.CreateIntArray(0)
     endIf
     int[] handles = Utility.CreateIntArray(described)
     int count = 0
@@ -746,24 +971,84 @@ Function AddNewShoutActors(int handle, Actor[] nearby)
     while i < described
         Actor npc = nearby[i]
         if npc && _shoutSentActors.Find(npc) < 0
-            int prebuilt = -1
-            if _prebuiltActors
-                prebuilt = _prebuiltActors.Find(npc)
+            int built = BuiltHandle(npc) ; Built by the room scan while the player typed, by the NPC Event check, or for the pending event
+            if built == 0
+                built = buildActorSetting(npc)
             endIf
-            if prebuilt >= 0
-                handles[count] = _prebuiltHandles[prebuilt] ; Built by the room scan while the player typed
-            else
-                handles[count] = buildActorSetting(npc)
-            endIf
+            handles[count] = built
             count += 1
-            _shoutSentActors = Utility.ResizeFormArray(_shoutSentActors, _shoutSentActors.Length + 1)
-            _shoutSentActors[_shoutSentActors.Length - 1] = npc
+            AddShoutSent(npc, built)
         endIf
         i += 1
     endWhile
     if count > 0
         SKSE_HTTP.setNestedDictionariesArray(handle, mConsts.KEY_SHOUT_NEARBY_ACTORS, Utility.ResizeIntArray(handles, count))
     endIf
+EndFunction
+
+; Someone's full actor settings, already built during this conversation, or 0 if they weren't: by the room scan or the NPC Event check
+; (_prebuiltActors), for the pending event (StartEventBuild), or sent by Shout or with an event. Building someone takes a moment
+int Function BuiltHandle(Actor npc)
+    int i = -1
+    int handle = 0
+    if _prebuiltActors
+        i = _prebuiltActors.Find(npc)
+        if i >= 0 && i < _prebuiltHandles.Length
+            handle = HandleIfTheirs(npc, _prebuiltHandles[i])
+        endIf
+    endIf
+    if handle == 0 && _eventPrebuiltActors
+        i = _eventPrebuiltActors.Find(npc)
+        if i >= 0 && i < _eventPrebuiltHandles.Length
+            handle = HandleIfTheirs(npc, _eventPrebuiltHandles[i])
+        endIf
+    endIf
+    if handle == 0 && _shoutSentActors
+        i = _shoutSentActors.Find(npc)
+        if i >= 0 && _shoutSentHandles && i < _shoutSentHandles.Length
+            handle = HandleIfTheirs(npc, _shoutSentHandles[i])
+        endIf
+    endIf
+    return handle
+EndFunction
+
+; The kept number, if it still holds npc's actor settings, otherwise 0, so they are built again. Once a kept number held something else (see
+; AddShoutSent), so a request went out with that person as null or as someone else's settings, and MantellaSoftware failed it
+int Function HandleIfTheirs(Actor npc, int handle)
+    if handle != 0 && SKSE_HTTP.getInt(handle, mConsts.KEY_ACTOR_REFID, 0) == (npc as Form).GetFormID()
+        return handle
+    endIf
+    return 0
+EndFunction
+
+; The server now has their bios and memories, so they are not sent in full again
+Function AddShoutSent(Form npc, int handle)
+    if !_shoutSentActors
+        _shoutSentActors = Utility.CreateFormArray(0)
+    endIf
+    if !_shoutSentHandles || _shoutSentHandles.Length != _shoutSentActors.Length
+        _shoutSentHandles = Utility.CreateIntArray(_shoutSentActors.Length) ; A 0 for anyone whose actor settings were not kept
+    endIf
+    _shoutSentActors = Utility.ResizeFormArray(_shoutSentActors, _shoutSentActors.Length + 1)
+    _shoutSentActors[_shoutSentActors.Length - 1] = npc
+    ; The place is worked out first: "_shoutSentHandles[_shoutSentHandles.Length - 1] = handle" compiles so the length overwrites the
+    ; handle before it's stored (the Papyrus compiler reuses one temporary for both), so everyone kept got their place + 1 as their number
+    int last = _shoutSentHandles.Length
+    _shoutSentHandles = Utility.ResizeIntArray(_shoutSentHandles, last + 1)
+    _shoutSentHandles[last] = handle
+EndFunction
+
+; Joins as someone the Game Master brought in by shouting: Private in an event conversation sends them away again. The next request carries them.
+; Also used by the in-game test (MantellaEventTest), to bring in someone an event described
+Function JoinByShouting(Actor npc)
+    Actor[] actors = new Actor[1]
+    actors[0] = npc
+    AddActors(actors)
+    if !_shoutJoiners
+        _shoutJoiners = Utility.CreateFormArray(0)
+    endIf
+    _shoutJoiners = Utility.ResizeFormArray(_shoutJoiners, _shoutJoiners.Length + 1)
+    _shoutJoiners[_shoutJoiners.Length - 1] = npc
 EndFunction
 
 ; The server's Game Master picked someone nearby. They join before they speak. If they no longer can, the server is told with the next request
@@ -788,9 +1073,7 @@ Function AddShoutActor(int refid)
         if repository.showShoutMessages
             Debug.Notification("Shout: " + npc.GetDisplayName() + " joins the conversation")
         endIf
-        Actor[] actors = new Actor[1]
-        actors[0] = npc
-        AddActors(actors)
+        JoinByShouting(npc)
     else
         _shoutAddFailedRefid = refid
         _shoutAddFailedReason = reason
@@ -806,6 +1089,618 @@ Function AddShoutActor(int refid)
 EndFunction
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;           Events            ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Conversation, Nearby and Random Events, picked on the Conversation Wheel. The NPCs stop and, with that event's Ask for a Hint, a text box
+; asks what should happen. In the player's turn, MantellaSoftware's event generator writes what happens, and its Game Master picks who
+; reacts first, the player included. Nearby and Random switch Shout on. Set up on the Events page.
+; See docs/conversation_wheel.md in the Mantella repository
+
+; kind is "conversation", "nearby" or "random"
+Function RequestConversationEvent(string kind)
+    if _hasBeenStopped || !IsRunning() || _pendingEventKind != "" || !IsPlayerInConversation()
+        return
+    endIf
+    if !_isGameMasterMode
+        Debug.Notification("Events need Game Master Mode")
+        return
+    endIf
+    repository.EnsureEventDefaults()
+    Actor[] nearby
+    if kind == "nearby"
+        ; Found before the NPCs are stopped: with nobody nearby, nothing happens. Random always goes ahead, so it looks after stopping them
+        nearby = FindEventNearby(kind)
+        if !nearby || nearby.Length == 0
+            Debug.Notification("Nobody is nearby")
+            return
+        endIf
+        if _hasBeenStopped || _pendingEventKind != "" ; Finding who is nearby can take a moment
+            return
+        endIf
+    endIf
+    _pendingEventKind = kind
+    _eventNearby = nearby
+    _eventBuildId += 1 ; No build from an earlier event is used
+    _eventPrebuiltActors = _noForms
+    _eventPrebuiltHandles = _noInts
+    _pendingEventHint = ""
+    _isEventHintDone = false
+    _isEventSent = false
+    _isEventTurn = _does_accept_player_input ; Already the player's turn (text, or push-to-talk not pressed yet)
+    _does_accept_player_input = false ; Talking and the text box are ignored until the event arrives
+    ClearRepeatingMessage()
+    if !_isEventTurn
+        ; The NPCs are talking, or the microphone waits for the player to speak. Both stop, and the turn comes back to the player
+        int handle = SKSE_HTTP.createDictionary()
+        SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_INTERRUPT)
+        SKSE_HTTP.setString(handle, mConsts.KEY_EVENT_KIND, kind)
+        SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+    endIf
+    if kind == "random"
+        nearby = FindEventNearby(kind)
+        if _pendingEventKind != kind
+            return ; Ended meanwhile
+        endIf
+        _eventNearby = nearby
+    endIf
+    if kind != "conversation"
+        StartEventBuild() ; While the NPCs finish their line and the player types the hint
+    endIf
+    if EventAsksForHint(kind)
+        UIExtensions.InitMenu("UITextEntryMenu")
+        UIExtensions.OpenMenu("UITextEntryMenu")
+        string hint = UIExtensions.GetMenuResultString("UITextEntryMenu") ; Cancelled or empty: a surprise
+        if _pendingEventKind != kind
+            return ; Ended meanwhile
+        endIf
+        _pendingEventHint = hint
+    endIf
+    _isEventHintDone = true
+    Debug.Notification("An event is generating...")
+    TrySendPendingEvent()
+EndFunction
+
+; Sent once the hint is done and it is the player's turn, whichever comes last
+Function TrySendPendingEvent()
+    if _pendingEventKind == "" || !_isEventHintDone || !_isEventTurn || _isEventSent || _hasBeenStopped
+        return
+    endIf
+    _isEventSent = true
+    string kind = _pendingEventKind
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_CONVERSATIONEVENT)
+    SKSE_HTTP.setString(handle, mConsts.KEY_EVENT_KIND, kind)
+    if _pendingEventHint != ""
+        SKSE_HTTP.setString(handle, mConsts.KEY_EVENT_HINT, _pendingEventHint)
+    endIf
+    SKSE_HTTP.setBool(handle, mConsts.KEY_EVENT_SENDHISTORY, EventSendsHistory(kind))
+    SKSE_HTTP.setBool(handle, mConsts.KEY_EVENT_INCLUDEPLAYER, EventIncludesPlayer(kind))
+    if kind != "conversation"
+        ; Before Shout's values, as Shout may send some of the same people. While shouting, Shout's new people go with the event, so its
+        ; Game Master knows them from the first pick. Otherwise they go with the first request after the event, and are built meanwhile
+        FinishEventBuild(_isShouting)
+        if _hasBeenStopped || _pendingEventKind != kind
+            return ; Ended while waiting
+        endIf
+    endIf
+    AddShoutValues(handle) ; Before the event's nearby list, so nobody Shout sends in full is sent twice
+    if kind != "conversation"
+        if !_isShouting
+            AddShoutSettings(handle) ; MantellaSoftware switches Shout on with the event, with these settings
+        endIf
+        AddEventNearby(handle, kind)
+    endIf
+    ; The actors and the context, as with the player's input
+    if repository.targetTrackingAngerState
+        UpdateNpcsInConversationArray()
+    endIf
+    SKSE_HTTP.setNestedDictionariesArray(handle, mConsts.KEY_ACTORS, _actorHandles)
+    BuildContext()
+    SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_CONTEXT, _contextHandle)
+    ; Gathering the above takes a moment. If the player ended the conversation meanwhile, MantellaSoftware was told to cancel the event
+    ; before this request existed, so it would write the event anyway. Nothing between this check and the send waits, so it can't change
+    if _hasBeenStopped || _pendingEventKind != kind
+        return
+    endIf
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+    _flushedEvents = _noStrings
+EndFunction
+
+; Who the event can be about, nearest first, with the full actor settings of the nearest who are not in the conversation (Most People Described).
+; Not of those Shout has already sent: MantellaSoftware keeps them. Most were built while the player typed the hint (StartEventBuild)
+Function AddEventNearby(int handle, string kind)
+    Actor[] nearby = _eventNearby
+    int count = 0
+    if nearby
+        count = nearby.Length
+    endIf
+    int described = EventDescribedCount(kind, count)
+    ; Start with a 0 and an empty name, so they are never empty
+    int[] refids = Utility.CreateIntArray(count + 1)
+    string[] names = Utility.CreateStringArray(count + 1)
+    int[] handles = Utility.CreateIntArray(described + 1)
+    Form[] sent = Utility.CreateFormArray(0)
+    int i = 0
+    while i < count
+        Actor npc = nearby[i]
+        refids[i + 1] = (npc as Form).GetFormID()
+        names[i + 1] = GetActorName(npc)
+        if i < described && NeedsEventActorSettings(npc)
+            int built = BuiltHandle(npc)
+            if built == 0
+                built = buildActorSetting(npc)
+            endIf
+            handles[sent.Length] = built
+            sent = Utility.ResizeFormArray(sent, sent.Length + 1)
+            sent[sent.Length - 1] = npc
+        endIf
+        i += 1
+    endWhile
+    SKSE_HTTP.setIntArray(handle, mConsts.KEY_EVENT_NEARBY_REFIDS, refids)
+    SKSE_HTTP.setStringArray(handle, mConsts.KEY_EVENT_NEARBY_NAMES, names)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_EVENT_MAXDESCRIBED, EventMaxDescribed(kind))
+    if sent.Length > 0
+        SKSE_HTTP.setNestedDictionariesArray(handle, mConsts.KEY_EVENT_NEARBY_ACTORS, Utility.ResizeIntArray(handles, sent.Length))
+    endIf
+    _eventSentActors = sent
+    _eventSentHandles = Utility.ResizeIntArray(handles, sent.Length)
+EndFunction
+
+; How many of the nearest the event describes in full (Most People Described), out of count
+int Function EventDescribedCount(string kind, int count)
+    int described = EventMaxDescribed(kind)
+    if described > count
+        described = count
+    endIf
+    if described < 0
+        described = 0
+    endIf
+    return described
+EndFunction
+
+; MantellaSoftware already has the people in the conversation, and those Shout sent
+bool Function NeedsEventActorSettings(Actor npc)
+    return npc && !Participants.HasForm(npc) && !(_isShouting && _shoutSentActors && _shoutSentActors.Find(npc) >= 0)
+EndFunction
+
+; Builds the full actor settings of the people the pending event will describe, on another thread, so it runs while the NPCs finish their
+; line and the player types the hint. Building someone takes a moment: with Most People Described at 6, it held up the event for seconds
+Function StartEventBuild()
+    _eventBuildId += 1
+    _eventPrebuiltActors = _noForms
+    _eventPrebuiltHandles = _noInts
+    RegisterForModEvent(EVENT_BUILD_EVENT(), "OnEventBuild") ; Again here, in case this save never ran RegisterForConversationEvents with it
+    int eventHandle = ModEvent.Create(EVENT_BUILD_EVENT())
+    if eventHandle
+        ModEvent.PushInt(eventHandle, _eventBuildId)
+        ModEvent.Send(eventHandle)
+    endIf
+EndFunction
+
+; First the people the event describes, then the people Shout will describe (Shout's Most People Described), who are sent with the event
+; when Shout is on, or with the first request after it when the event switches Shout on. The event's are ready first, so the event
+; never waits for Shout's: those are built while the event is generated
+Event OnEventBuild(int buildId)
+    if buildId != _eventBuildId || _eventBuildDoneId == buildId || _eventBuildStartedId == buildId
+        return
+    endIf
+    _eventBuildStartedId = buildId
+    ; Worked out now: the event may end, and clear what it found, while this runs
+    Actor[] forEvent = EventBuildList()
+    Actor[] forShout = ShoutBuildList(forEvent)
+    int total = forEvent.Length + forShout.Length
+    Form[] built = Utility.CreateFormArray(total)
+    int[] handles = Utility.CreateIntArray(total)
+    int i = 0
+    while i < total
+        if buildId != _eventBuildId || _eventBuildAllDoneId == buildId
+            return ; The event ended, a newer one replaced it, or FinishEventBuild gave up waiting
+        endIf
+        if i == forEvent.Length
+            if _eventBuildDoneId == buildId ; FinishEventBuild gave up waiting
+                return
+            endIf
+            ; Handles first: BuiltHandle reads the actors' place in the handles, so a reader in between finds nothing rather than a wrong one
+            _eventPrebuiltHandles = Utility.ResizeIntArray(handles, i)
+            _eventPrebuiltActors = Utility.ResizeFormArray(built, i)
+            _eventBuildDoneId = buildId
+        endIf
+        Actor npc
+        if i < forEvent.Length
+            npc = forEvent[i]
+        else
+            npc = forShout[i - forEvent.Length]
+        endIf
+        built[i] = npc
+        handles[i] = BuiltHandle(npc) ; Shout may have built them meanwhile
+        if handles[i] == 0
+            handles[i] = buildActorSetting(npc)
+        endIf
+        i += 1
+    endWhile
+    if buildId != _eventBuildId || _eventBuildAllDoneId == buildId
+        return
+    endIf
+    _eventPrebuiltHandles = handles
+    _eventPrebuiltActors = built
+    _eventBuildDoneId = buildId
+    _eventBuildAllDoneId = buildId
+EndEvent
+
+; The nearest the pending event describes in full (Most People Described) who MantellaSoftware doesn't have yet
+Actor[] Function EventBuildList()
+    Actor[] nearby = _eventNearby
+    int count = 0
+    if nearby
+        count = nearby.Length
+    endIf
+    int described = EventDescribedCount(_pendingEventKind, count)
+    Actor[] found = PapyrusUtil.ActorArray(described)
+    int foundCount = 0
+    int i = 0
+    while i < described
+        if NeedsEventActorSettings(nearby[i])
+            found[foundCount] = nearby[i]
+            foundCount += 1
+        endIf
+        i += 1
+    endWhile
+    return FirstActors(found, foundCount)
+EndFunction
+
+; The nearest Shout will describe in full that it hasn't sent yet, and the event doesn't build already (alreadyListed). AddNewShoutActors takes
+; them from Shout's list: the list it has now when shouting, otherwise the one the event will give it (the people the event found who aren't
+; in the conversation)
+Actor[] Function ShoutBuildList(Actor[] alreadyListed)
+    Actor[] shoutNearby
+    if _isShouting
+        shoutNearby = _shoutNearby
+    else
+        shoutNearby = NotInConversation(_eventNearby)
+    endIf
+    int count = 0
+    if shoutNearby
+        count = shoutNearby.Length
+    endIf
+    int described = repository.shoutMaxCandidates
+    if described > count
+        described = count
+    endIf
+    if described < 0
+        described = 0
+    endIf
+    Actor[] found = PapyrusUtil.ActorArray(described)
+    int foundCount = 0
+    int i = 0
+    while i < described
+        Actor npc = shoutNearby[i]
+        if npc && alreadyListed.Find(npc) < 0 && !(_isShouting && _shoutSentActors && _shoutSentActors.Find(npc) >= 0)
+            found[foundCount] = npc
+            foundCount += 1
+        endIf
+        i += 1
+    endWhile
+    return FirstActors(found, foundCount)
+EndFunction
+
+; The first count actors, as a new array
+Actor[] Function FirstActors(Actor[] actors, int count)
+    Actor[] result = PapyrusUtil.ActorArray(count)
+    int i = 0
+    while i < count
+        result[i] = actors[i]
+        i += 1
+    endWhile
+    return result
+EndFunction
+
+; Waits for the build: the event's people, or with all, Shout's too. If it never began (the mod event didn't arrive), or is still running
+; after MAX_BUILD_WAIT (it should never take that long), it is given up: AddEventNearby and AddNewShoutActors build whoever is missing
+Function FinishEventBuild(bool all)
+    int buildId = _eventBuildId
+    float waited = 0.0
+    while _eventBuildDoneId != buildId && buildId == _eventBuildId && (_eventBuildStartedId == buildId || waited < 2.0) && waited < MAX_BUILD_WAIT()
+        Utility.WaitMenuMode(0.1)
+        waited += 0.1
+    endWhile
+    while all && _eventBuildDoneId == buildId && _eventBuildAllDoneId != buildId && buildId == _eventBuildId && waited < MAX_BUILD_WAIT()
+        Utility.WaitMenuMode(0.1)
+        waited += 0.1
+    endWhile
+    if buildId == _eventBuildId && (_eventBuildDoneId != buildId || (all && _eventBuildAllDoneId != buildId))
+        ; Never began, or given up. Marked done, so the build stops at its next step and later waits don't wait for it
+        _eventBuildDoneId = buildId
+        _eventBuildAllDoneId = buildId
+    endIf
+EndFunction
+
+; Seconds. The longest a background build or search is waited for. Building 12 people takes about 25 seconds
+float Function MAX_BUILD_WAIT() global
+    return 30.0
+EndFunction
+
+; The build is no longer needed: the event ended, and the first request after it has gone
+Function StopEventBuild()
+    _eventBuildId += 1 ; A build still running stops
+    _eventPrebuiltActors = _noForms
+    _eventPrebuiltHandles = _noInts
+EndFunction
+
+; Nearby and Random: who the event can be about, nearest first. Found with the Shout Mode page's Hearing Distance, Must Be in Sight and
+; Most People Listed, and the event's own Include Followers. Random: the NPCs in the conversation too.
+; While shouting, Shout's own list from the last tick is used instead of scanning, as it was found with the same settings
+Actor[] Function FindEventNearby(string kind)
+    bool includeFollowers = repository.nearbyEventIncludeFollowers
+    if kind == "random"
+        includeFollowers = repository.randomEventIncludeFollowers
+    endIf
+    Actor[] others
+    if CanUseShoutList(includeFollowers)
+        others = NotInConversation(_shoutNearby) ; Someone may have joined since
+        if !repository.shoutExcludeFollowers && !includeFollowers
+            others = WithoutFollowers(others)
+        endIf
+    elseIf TakeEventScan(includeFollowers)
+        others = NotInConversation(_eventScanNearby)
+        if _eventScanHasFollowers && !includeFollowers
+            others = WithoutFollowers(others)
+        endIf
+    else
+        others = MantellaShout.FindNearbyWith(repository, self, repository.shoutHearingDistance, includeFollowers, repository.shoutRequireLineOfSight, repository.shoutMaxListed)
+    endIf
+    if kind != "random"
+        return others
+    endIf
+    int otherCount = 0
+    if others
+        otherCount = others.Length
+    endIf
+    int total = otherCount + Participants.GetSize()
+    Actor[] found = PapyrusUtil.ActorArray(total)
+    float[] distances = Utility.CreateFloatArray(total)
+    int count = 0
+    int i = 0
+    while i < otherCount
+        count = MantellaWheel.InsertByDistance(found, distances, count, total, others[i], PlayerRef.GetDistance(others[i]))
+        i += 1
+    endWhile
+    i = 0
+    while i < Participants.GetSize()
+        Actor npc = Participants.GetAt(i) as Actor
+        if npc && npc != PlayerRef
+            count = MantellaWheel.InsertByDistance(found, distances, count, total, npc, PlayerRef.GetDistance(npc))
+        endIf
+        i += 1
+    endWhile
+    Actor[] result = PapyrusUtil.ActorArray(count)
+    i = 0
+    while i < count
+        result[i] = found[i]
+        i += 1
+    endWhile
+    return result
+EndFunction
+
+; Shout's list from the last tick can stand in for a search: found with the Shout Mode page's rules, with the followers the event needs.
+; _shoutNearbyRefids is set with every list, also one where nobody is nearby
+bool Function CanUseShoutList(bool includeFollowers)
+    return _isShouting && _isShoutNearbyByShoutRules && _shoutNearbyRefids && (includeFollowers || !repository.shoutExcludeFollowers)
+EndFunction
+
+; Opening the Conversation Wheel starts searching for who is nearby, on another thread, so a Nearby or Random Event picked on it doesn't
+; wait for the search: it took a second or more, and a Nearby Event searches before the NPCs are told to stop. Not needed when Shout's own
+; list can be used
+Function StartEventScan()
+    if _hasBeenStopped || !IsRunning() || !_isGameMasterMode || _pendingEventKind != "" || !IsPlayerInConversation()
+        return
+    endIf
+    if CanUseShoutList(repository.nearbyEventIncludeFollowers) && CanUseShoutList(repository.randomEventIncludeFollowers)
+        return
+    endIf
+    _eventScanId += 1
+    RegisterForModEvent(EVENT_SCAN_EVENT(), "OnEventScan") ; Again here, in case this save never ran RegisterForConversationEvents with it
+    int eventHandle = ModEvent.Create(EVENT_SCAN_EVENT())
+    if eventHandle
+        ModEvent.PushInt(eventHandle, _eventScanId)
+        ModEvent.Send(eventHandle)
+        _eventScanSentId = _eventScanId
+    endIf
+EndFunction
+
+; With the followers if either event includes them: FindEventNearby leaves them out for an event that doesn't
+Event OnEventScan(int scanId)
+    if scanId != _eventScanId || _eventScanStartedId == scanId || _eventScanDoneId == scanId
+        return
+    endIf
+    _eventScanStartedId = scanId
+    bool includeFollowers = repository.nearbyEventIncludeFollowers || repository.randomEventIncludeFollowers
+    Actor[] found = MantellaShout.FindNearbyWith(repository, self, repository.shoutHearingDistance, includeFollowers, repository.shoutRequireLineOfSight, repository.shoutMaxListed)
+    if scanId != _eventScanId
+        return
+    endIf
+    _eventScanNearby = found
+    _eventScanHasFollowers = includeFollowers
+    _eventScanTime = Utility.GetCurrentRealTime()
+    _eventScanDoneId = scanId
+EndEvent
+
+; True if the search started when the wheel opened can be used: it found the followers the event needs, and is recent. Waits for it if
+; it is still running. A search that never began, or still runs after MAX_BUILD_WAIT, is given up, and FindEventNearby searches itself
+bool Function TakeEventScan(bool includeFollowers)
+    int scanId = _eventScanId
+    if scanId == 0 || (_eventScanDoneId != scanId && _eventScanSentId != scanId)
+        return false ; None was asked for: the conversation ended since, the last one was given up, or the wheel didn't need one
+    endIf
+    float waited = 0.0
+    while _eventScanDoneId != scanId && scanId == _eventScanId && (_eventScanStartedId == scanId || waited < 0.5) && waited < MAX_BUILD_WAIT()
+        Utility.WaitMenuMode(0.1)
+        waited += 0.1
+    endWhile
+    if _eventScanDoneId != scanId
+        if scanId == _eventScanId
+            _eventScanId += 1 ; So its result is unused if it begins or finishes after all
+        endIf
+        return false
+    endIf
+    return (_eventScanHasFollowers || !includeFollowers) && Utility.GetCurrentRealTime() - _eventScanTime <= 15.0
+EndFunction
+
+Function OnConversationEventResult(int handle)
+    string kind = _pendingEventKind
+    Actor[] nearby = _eventNearby
+    Form[] sentActors = _eventSentActors
+    int[] sentHandles = _eventSentHandles
+    ClearPendingEvent(keepBuild = true) ; Shout's people may still be building, for the request below
+    if _hasBeenStopped || kind == ""
+        StopEventBuild()
+        return ; Ended meanwhile
+    endIf
+    if !SKSE_HTTP.getBool(handle, mConsts.KEY_EVENT_RESULT, false)
+        StopEventBuild()
+        if _isGameMasterMode
+            Debug.Notification("Nothing happened")
+        else
+            Debug.Notification("Events need Game Master Mode")
+        endIf
+        GivePlayerTheTurn()
+        return
+    endIf
+    Debug.Notification("Something happened") ; Never what happened
+    if kind != "conversation"
+        if !_isShouting
+            ; MantellaSoftware switched Shout on with the event, and its Game Master may already bring in someone the event was about.
+            ; The next tick finds who is nearby with the Shout Mode page's settings
+            _isShouting = true
+            SetShoutNearby(NotInConversation(nearby))
+            _shoutSentActors = Utility.CreateFormArray(0)
+            _shoutSentHandles = Utility.CreateIntArray(0)
+        endIf
+        ; MantellaSoftware keeps them for Shout too, so they are not sent again. And someone who then joins uses the actor settings built for
+        ; the event: the Game Master often brings in who the event was about
+        AddShoutSentActors(sentActors, sentHandles)
+        _lastEventSentActors = sentActors
+        _isAfterEvent = true
+        FinishEventBuild(true) ; Built while the event was generated, so usually done. The Shout values below send them
+    endIf
+    RequestContinueConversation()
+    if _pendingEventKind == "" ; Another event picked meanwhile has its own build running
+        StopEventBuild()
+    endIf
+EndFunction
+
+Function AddShoutSentActors(Form[] actors, int[] handles)
+    int i = 0
+    while actors && i < actors.Length
+        if actors[i] && !(_shoutSentActors && _shoutSentActors.Find(actors[i]) >= 0)
+            int handle = 0
+            if handles && i < handles.Length
+                handle = handles[i]
+            endIf
+            AddShoutSent(actors[i], handle)
+        endIf
+        i += 1
+    endWhile
+EndFunction
+
+; Leaves out the active followers: a Nearby or Random Event without Include Followers, using Shout's list, which has them
+Actor[] Function WithoutFollowers(Actor[] actors)
+    int count = 0
+    if actors
+        count = actors.Length
+    endIf
+    Actor[] found = PapyrusUtil.ActorArray(count)
+    int foundCount = 0
+    int i = 0
+    while i < count
+        if actors[i] && !MantellaActorChecks.IsActiveFollower(actors[i], repository)
+            found[foundCount] = actors[i]
+            foundCount += 1
+        endIf
+        i += 1
+    endWhile
+    Actor[] result = PapyrusUtil.ActorArray(foundCount)
+    i = 0
+    while i < foundCount
+        result[i] = found[i]
+        i += 1
+    endWhile
+    return result
+EndFunction
+
+Actor[] Function NotInConversation(Actor[] actors)
+    int count = 0
+    if actors
+        count = actors.Length
+    endIf
+    Actor[] found = PapyrusUtil.ActorArray(count)
+    int foundCount = 0
+    int i = 0
+    while i < count
+        if actors[i] && !Participants.HasForm(actors[i])
+            found[foundCount] = actors[i]
+            foundCount += 1
+        endIf
+        i += 1
+    endWhile
+    Actor[] result = PapyrusUtil.ActorArray(foundCount)
+    i = 0
+    while i < foundCount
+        result[i] = found[i]
+        i += 1
+    endWhile
+    return result
+EndFunction
+
+; keepBuild: the event's build goes on (see OnConversationEventResult)
+Function ClearPendingEvent(bool keepBuild = false)
+    _pendingEventKind = ""
+    _pendingEventHint = ""
+    _isEventHintDone = false
+    _isEventTurn = false
+    _isEventSent = false
+    _eventNearby = _noActors
+    _eventSentActors = _noForms
+    _eventSentHandles = _noInts
+    if !keepBuild
+        StopEventBuild()
+    endIf
+EndFunction
+
+bool Function EventAsksForHint(string kind)
+    if kind == "conversation"
+        return repository.conversationEventAskForHint
+    elseIf kind == "nearby"
+        return repository.nearbyEventAskForHint
+    endIf
+    return repository.randomEventAskForHint
+EndFunction
+
+bool Function EventSendsHistory(string kind)
+    if kind == "conversation"
+        return repository.conversationEventSendHistory
+    elseIf kind == "nearby"
+        return repository.nearbyEventSendHistory
+    endIf
+    return repository.randomEventSendHistory
+EndFunction
+
+bool Function EventIncludesPlayer(string kind)
+    if kind == "conversation"
+        return repository.conversationEventIncludePlayer
+    elseIf kind == "nearby"
+        return repository.nearbyEventIncludePlayer
+    endIf
+    return repository.randomEventIncludePlayer
+EndFunction
+
+int Function EventMaxDescribed(string kind)
+    if kind == "nearby"
+        return repository.nearbyEventMaxDescribed
+    endIf
+    return repository.randomEventMaxDescribed
+EndFunction
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;       End conversation      ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -814,6 +1709,14 @@ event OnEndConversationActionReceived(Form speaker, string sentence)
 endEvent
 
 Function EndConversation()
+    if _pendingEventKind != ""
+        ; Stops the event being generated. Sent right away, while the event request may still be running
+        int cancelHandle = SKSE_HTTP.createDictionary()
+        SKSE_HTTP.setString(cancelHandle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_INTERRUPT)
+        SKSE_HTTP.setBool(cancelHandle, mConsts.KEY_EVENT_CANCEL, true)
+        SKSE_HTTP.sendLocalhostHttpRequest(cancelHandle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+        ClearPendingEvent()
+    endIf
     _hasBeenStopped = true
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE,mConsts.KEY_REQUESTTYPE_ENDCONVERSATION)
@@ -824,9 +1727,9 @@ Function CleanupConversation()
     int i = 0
     ClearParticipants()
     ClearRepeatingMessage()
-    _ingameEvents = None
-    _flushedEvents = None
-    _cooldownEvents = None ; So a cooldown from this conversation does not hide events in the next one
+    _ingameEvents = _noStrings
+    _flushedEvents = _noStrings
+    _cooldownEvents = _noStrings ; So a cooldown from this conversation does not hide events in the next one
     _does_accept_player_input = false
     _isTalking = false
     _lastNpcToSpeak = None
@@ -836,6 +1739,16 @@ Function CleanupConversation()
     _sendQuestChecksCatchUp = false
     _isRoomFirstTurn = false
     _roomLine = ""
+    _isRoomConversation = false
+    _isGameMasterMode = false
+    _isAfterEvent = false
+    _shoutJoiners = _noForms
+    _actorHandleActors = _noForms ; So the next conversation builds everyone fresh
+    _staleActors = _noForms
+    ClearPendingEvent()
+    _eventScanId += 1 ; A search from the wheel is about this conversation's people
+    _eventScanNearby = _noActors
+    _lastEventSentActors = _noForms
     ClearPrebuiltActors()
     ClearShout()
     ;SKSE_HTTP.clearAllDictionaries()
@@ -885,7 +1798,7 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
         AddShoutValues(handle)
 
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
-        _flushedEvents = None
+        _flushedEvents = _noStrings
     EndIf
 endFunction
 
@@ -897,8 +1810,8 @@ function RequestInterrupt()
         AddActors(actors)
         Debug.Notification("Joining the conversation...")
     endif
-    ; Nothing to interrupt during the player's turn or without the player (radiant conversations)
-    if(_hasBeenStopped || _does_accept_player_input || !IsPlayerInConversation())
+    ; Nothing to interrupt during the player's turn or without the player (radiant conversations), nor while an event is on its way
+    if(_hasBeenStopped || _does_accept_player_input || !IsPlayerInConversation() || _pendingEventKind != "")
         return
     endif
 
@@ -1139,7 +2052,7 @@ Function RestoreFlushedEvents()
     endIf
     string[] newerEvents = _ingameEvents
     _ingameEvents = _flushedEvents
-    _flushedEvents = None
+    _flushedEvents = _noStrings
     if newerEvents
         int i = 0
         While i < newerEvents.Length
@@ -1268,6 +2181,13 @@ Function RemoveActors(Actor[] actorsToRemove)
             Participants.RemoveAddedForm(actorInQuestion)
             actorInQuestion.RemoveFromFaction(MantellaConversationParticipantsFaction)
             Debug.Notification(actorInQuestion.GetDisplayName()+" left the conversation.")
+            int joinerIndex = -1
+            if _shoutJoiners
+                joinerIndex = _shoutJoiners.Find(actorInQuestion)
+            endIf
+            if joinerIndex >= 0
+                _shoutJoiners[joinerIndex] = None ; If the player brings them back in, they no longer count as joined by shouting
+            endIf
         EndIf
         i += 1
     EndWhile
@@ -1339,15 +2259,68 @@ Function AddCurrentActorsAndContext(int handleToAddTo, bool isConversationStart 
     SKSE_HTTP.setNestedDictionary(handleToAddTo, mConsts.KEY_CONTEXT, _contextHandle)
 EndFunction
 
+; Only who is new is built now: building someone's actor settings takes a moment, which held up joins and stepping into an NPC Event.
+; Who was already in the conversation keeps theirs, and so does someone built earlier in it (BuiltHandle): by a room scan or the NPC Event
+; check, or sent by Shout or with an event. Their actor settings are built again on the next ticks (RefreshStaleActors), as they used to be
+; on every join and leave
 int[] function BuildNpcsInConversationArray()
-    _actorHandles =  Utility.CreateIntArray(Participants.GetSize())
+    int count = Participants.GetSize()
+    int[] handles = Utility.CreateIntArray(count)
+    Form[] actors = Utility.CreateFormArray(count)
+    Form[] stale = Utility.CreateFormArray(count)
+    int staleCount = 0
     int i = 0
-    While i < Participants.GetSize()
-        _actorHandles[i] = buildActorSetting(Participants.GetAt(i) as Actor)
+    While i < count
+        Actor npc = Participants.GetAt(i) as Actor
+        actors[i] = npc
+        int kept = -1
+        if _actorHandleActors
+            kept = _actorHandleActors.Find(npc)
+        endIf
+        int built = 0
+        if kept >= 0 && kept < _actorHandles.Length
+            built = _actorHandles[kept]
+        else
+            built = BuiltHandle(npc)
+        endIf
+        if built != 0
+            handles[i] = built
+            stale[staleCount] = npc
+            staleCount += 1
+        else
+            handles[i] = buildActorSetting(npc)
+        endIf
         i += 1
     EndWhile
+    _actorHandles = handles
+    _actorHandleActors = actors
+    _staleActors = Utility.ResizeFormArray(stale, staleCount)
     _actorsUpdated = true
 endFunction
+
+; Called on the listener's ticks. Builds again the actor settings kept by the last join or leave (see BuildNpcsInConversationArray),
+; and sends them with the next request
+Function RefreshStaleActors()
+    bool refreshed = false
+    while _staleActors && _staleActors.Length > 0 && IsRunning() && !_hasBeenStopped
+        Actor npc = _staleActors[_staleActors.Length - 1] as Actor
+        _staleActors = Utility.ResizeFormArray(_staleActors, _staleActors.Length - 1)
+        if npc
+            int handle = buildActorSetting(npc)
+            int index = -1
+            if _actorHandleActors
+                index = _actorHandleActors.Find(npc) ; Looked up after building: someone may have joined or left meanwhile
+            endIf
+            if index >= 0 && index < _actorHandles.Length
+                _actorHandles[index] = handle
+                refreshed = true
+            endIf
+        endIf
+    endWhile
+    if refreshed
+        _actorsUpdated = true
+    endIf
+EndFunction
 
 int[] function UpdateNpcsInConversationArray()
     ; Update NPC details where variables are dynamic

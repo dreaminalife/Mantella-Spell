@@ -69,7 +69,7 @@ Actor[] _roomScanNearby ; What the last finished room scan found
 Form[] _prebuiltActors ; People nearby whose full actor settings the room scan built while the player typed, or the NPC Event check built
 int[] _prebuiltHandles ; Their actor settings, used by the start instead of building them again
 Actor[] _npcEventNearby ; Who the NPC Event check found nearby, so the start doesn't scan again
-bool _isRoomConversation = false ; Started by saying something to the room. Never an event conversation, so Private works as for any Shout
+bool _isRoomConversation = false ; Started by saying something to the room, until the first Private. Everyone in it joined by shouting, so that Private sends nobody away
 bool _isGameMasterMode = false ; From MantellaSoftware's replies. Conversation, Nearby and Random Events need it
 string _pendingEventKind = "" ; A Conversation, Nearby or Random Event picked on the wheel, until its result arrives. "" for none
 string _pendingEventHint = ""
@@ -92,8 +92,8 @@ bool _eventScanHasFollowers = false ; Whether that search included the active fo
 float _eventScanTime = 0.0 ; When it finished, in real time
 Form[] _eventPrebuiltActors ; People the pending event is about, built while the NPCs finished their line and the player typed the hint
 int[] _eventPrebuiltHandles ; Their actor settings, in the same order
-bool _isAfterEvent = false ; A Nearby or Random Event happened. With an NPC Event the player is in, it makes this an event conversation (see SetShout)
 Form[] _shoutJoiners ; Who joined by shouting and is still in the conversation. Kept when Shout is switched off
+string _confirmPrivateText = "" ; The text for the message box of ConfirmPrivate while it is open. "" otherwise
 
 ; Never assigned, so always None: arrays are cleared with these. Assigning None to an array fails in the game ("Cannot cast from None to
 ; Actor[]"), and a local array declared "= None" then can't take an array at all, so it stays None
@@ -718,9 +718,10 @@ Function ClearPrebuiltActors()
     _prebuiltHandles = _noInts
 EndFunction
 
-; On: anyone nearby can answer or join in. Off (Private): nobody new joins. Everyone already in the conversation stays, the people who joined by
-; shouting too, except in an event conversation (IsEventConversation): there they leave, once the player says yes in a list menu.
-; MantellaSoftware learns about it with the next request
+; On: anyone nearby can answer or join in. Off (Private): nobody new joins, and the people who joined by shouting leave, once the player says yes
+; in a list menu. Everyone else stays: the people the conversation started with, and anyone the player brought in themselves. In a conversation
+; started by saying something to the room, everyone joined by shouting, so the first Private keeps everyone and makes them the people the
+; conversation is with: a later Shout and Private sends away only who joined after it. MantellaSoftware learns about it with the next request
 Function SetShout(bool isOn)
     if isOn == _isShouting || !IsRunning()
         return
@@ -738,7 +739,7 @@ Function SetShout(bool isOn)
         return
     endIf
     Actor[] leaving
-    if IsEventConversation()
+    if !_isRoomConversation
         leaving = ShoutJoinersInConversation()
         if leaving && leaving.Length > 0
             if !ConfirmPrivate(leaving)
@@ -750,6 +751,9 @@ Function SetShout(bool isOn)
             endIf
             leaving = ShoutJoinersInConversation() ; Everyone who joined by shouting leaves, so only the people named as staying stay
         endIf
+    else
+        _isRoomConversation = false
+        _shoutJoiners = _noForms ; Everyone here now counts as who the conversation is with
     endIf
     ClearShout()
     if leaving && leaving.Length > 0
@@ -762,11 +766,6 @@ Function SetShout(bool isOn)
     else
         Debug.Notification("Private: nobody new joins")
     endIf
-EndFunction
-
-; After a Nearby or Random Event, or in an NPC Event the player stepped into. Never a conversation started by saying something to the room
-bool Function IsEventConversation()
-    return !_isRoomConversation && (_isAfterEvent || IsNpcEvent())
 EndFunction
 
 ; The people who joined by shouting and are still in the conversation. Not the people the conversation started with, nor anyone the player
@@ -796,9 +795,8 @@ Actor[] Function ShoutJoinersInConversation()
     return result
 EndFunction
 
-; Asks before the people who joined by shouting are sent away. Closing the menu counts as no.
-; The list menu cuts long lines, so the full explanation goes in a message box first, which wraps its text. It only has an OK button,
-; so a short Yes / No list follows once it is closed
+; Asks before the people who joined by shouting are sent away, in a message box with Yes and No buttons. The box is a record in Mantella.esp,
+; whose text is fixed, so OnMenuOpen puts the text with the names in once the box is on the screen
 bool Function ConfirmPrivate(Actor[] leaving)
     int count = Participants.GetSize()
     Actor[] staying = PapyrusUtil.ActorArray(count)
@@ -812,20 +810,31 @@ bool Function ConfirmPrivate(Actor[] leaving)
         endIf
         i += 1
     endWhile
-    string text = "Go private?\n\nIf you do, " + NamesText(leaving, leaving.Length) + Verb(" leave", leaving.Length) + " the conversation"
+    string text = "Go private?\n\nIf you do, " + NamesText(leaving, leaving.Length) + Verb(" leaves", " leave", leaving.Length) + " the conversation"
     if stayingCount > 0
-        text += ", and only " + NamesText(staying, stayingCount) + Verb(" stay", stayingCount) + "."
+        text += ", and only " + NamesText(staying, stayingCount) + Verb(" stays", " stay", stayingCount) + "."
     else
         text += ", and the conversation ends."
     endIf
-    Debug.MessageBox(text)
-    Utility.Wait(0.1) ; Doesn't count time while a menu is open, so this returns once the message box is closed
-    UIListMenu menu = UIExtensions.GetMenu("UIListMenu", true) as UIListMenu
-    menu.AddEntryItem("Yes, go private")
-    menu.AddEntryItem("No, keep shouting")
-    menu.OpenMenu()
-    return menu.GetResultInt() == 0
+    Message box = Game.GetFormFromFile(0x18B645, "Mantella.esp") as Message ; MantellaConfirmPrivateMessage
+    if !box
+        Debug.Notification("Mantella.esp is out of date: can't ask before going private")
+        return false
+    endIf
+    _confirmPrivateText = text
+    RegisterForMenu("MessageBoxMenu")
+    int answer = box.Show() ; Waits for a button. 0 is Yes, 1 is No
+    UnregisterForMenu("MessageBoxMenu")
+    _confirmPrivateText = ""
+    return answer == 0
 EndFunction
+
+; The message box of ConfirmPrivate is on the screen with its fixed text: shows the text with the names instead
+Event OnMenuOpen(string menuName)
+    if menuName == "MessageBoxMenu" && _confirmPrivateText != ""
+        UI.InvokeString("MessageBoxMenu", "_root.MessageMenu.SetMessage", _confirmPrivateText)
+    endIf
+EndEvent
 
 ; The names of the first count actors: "Hulda", "Hulda and Mikael", "Hulda, Mikael and Lydia"
 string Function NamesText(Actor[] actors, int count)
@@ -838,10 +847,11 @@ string Function NamesText(Actor[] actors, int count)
     return names
 EndFunction
 
-; " leave" for several people, " leaves" for one
-string Function Verb(string plural, int count)
+; singular for one person, plural for several. Both are passed in full: Papyrus treats strings that differ only in case as the same string,
+; so a lone "s" literal comes out as "S" when some other script has an "S"
+string Function Verb(string singular, string plural, int count)
     if count == 1
-        return plural + "s"
+        return singular
     endIf
     return plural
 EndFunction
@@ -1038,7 +1048,7 @@ Function AddShoutSent(Form npc, int handle)
     _shoutSentHandles[last] = handle
 EndFunction
 
-; Joins as someone the Game Master brought in by shouting: Private in an event conversation sends them away again. The next request carries them.
+; Joins as someone the Game Master brought in by shouting: Private sends them away again. The next request carries them.
 ; Also used by the in-game test (MantellaEventTest), to bring in someone an event described
 Function JoinByShouting(Actor npc)
     Actor[] actors = new Actor[1]
@@ -1579,7 +1589,6 @@ Function OnConversationEventResult(int handle)
         ; the event: the Game Master often brings in who the event was about
         AddShoutSentActors(sentActors, sentHandles)
         _lastEventSentActors = sentActors
-        _isAfterEvent = true
         FinishEventBuild(true) ; Built while the event was generated, so usually done. The Shout values below send them
     endIf
     RequestContinueConversation()
@@ -1741,7 +1750,6 @@ Function CleanupConversation()
     _roomLine = ""
     _isRoomConversation = false
     _isGameMasterMode = false
-    _isAfterEvent = false
     _shoutJoiners = _noForms
     _actorHandleActors = _noForms ; So the next conversation builds everyone fresh
     _staleActors = _noForms

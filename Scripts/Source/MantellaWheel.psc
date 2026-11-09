@@ -33,7 +33,7 @@ EndFunction
 int Function ACTION_SHOUT() global ; Anyone nearby can answer or join in. See MantellaShout
     return 10
 EndFunction
-int Function ACTION_PRIVATE() global ; Shout off: nobody new joins. Everyone already in the conversation stays
+int Function ACTION_PRIVATE() global ; Shout off: nobody new joins, and the people who joined by shouting leave (see MantellaConversation.SetShout)
     return 11
 EndFunction
 int Function ACTION_SAY_TO_ROOM() global ; Just saying something: said to whoever is around. See MantellaShout.SayToRoom

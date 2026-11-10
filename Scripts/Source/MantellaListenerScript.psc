@@ -22,6 +22,7 @@ event OnInit()
     PlayerRef.AddSpell(MantellaRemoveNpcSpell)
     PlayerRef.AddSpell(MantellaRemoveNpcPower)
     PlayerRef.AddToFaction(repository.giafac_AllowDialogue);gia
+    MantellaKillEvents.Register(self)
     Debug.Notification("Please save and reload to activate Mantella.")
 endEvent
 
@@ -73,6 +74,7 @@ Event OnPlayerLoadGame()
     RegisterForModEvent("Mantella_EventTest", "OnEventTest")
     RegisterForModEvent(NPC_EVENT_BUILD_EVENT(), "OnNpcEventBuild")
     RegisterForMenu("Loading Menu")
+    MantellaKillEvents.Register(self) ; Again here, in case this save never ran OnInit with it, or the extender was only just installed
     _lastCell = PlayerRef.GetParentCell()
     ; Real time starts from 0 on every game launch, so times kept in the save would be in the future
     _initiativePending = false
@@ -351,6 +353,43 @@ Event OnDying(Actor akKiller)
     If (conversation.IsRunning())
         conversation.EndConversation()
     EndIf
+EndEvent
+
+
+; Who landed the killing blow on an enemy. The OnDying handlers only cover the player and the conversation's own participants,
+; so without this nobody learns that a follower finally brought down the dragon the whole party was fighting.
+; Sent by powerofthree's Papyrus Extender, which is an OPTIONAL requirement: without it this event never arrives and nothing
+; else changes. MantellaKillEvents holds every mention of the extender, so this script loads fine when it isn't installed.
+; Mantella merges these lines by this wording (ingame_event_tidy.py), so keep them in sync
+Event OnActorKilled(Actor akVictim, Actor akKiller)
+    If (!akVictim || !akKiller || !conversation.IsRunning())
+        return
+    EndIf
+    ; A downed follower is not a kill: essential and protected NPCs bleed out and get back up. Essential ones can never die,
+    ; and the others are only passed over while they are bleeding out without being dead yet.
+    ; IsDead() alone can't be trusted here (it isn't reliably set yet when the kill is reported), and IsBleedingOut() alone
+    ; would throw away the real deaths that pass through bleedout first, which is how dragons and 'no bleedout recovery' NPCs die
+    If (akVictim.IsEssential() || (akVictim.IsBleedingOut() && !akVictim.IsDead()))
+        return
+    EndIf
+    ; Only a kill by someone in the conversation is worth a line, or a big fight nearby would fill the events with strangers.
+    ; A participant's own death is already reported by the OnDying handlers, so it is left out here.
+    ; Note that OnDying takes the dead one out of the conversation, so if it ran first this event no longer sees them as a
+    ; participant and reports the death a second time. The sentence below is worded exactly as OnDying words it, which lets
+    ; Mantella merge the two into one line (ingame_event_tidy.py). Keep the two wordings identical
+    If (!conversation.Participants.HasForm(akKiller) || conversation.Participants.HasForm(akVictim))
+        return
+    EndIf
+    String victimName = akVictim.GetDisplayName()
+    If (victimName == "")
+        return
+    EndIf
+    String killerName = akKiller.GetDisplayName()
+    If (akKiller == PlayerRef)
+        killerName = getPlayerName(False)
+    EndIf
+    ; With a cooldown: a death can be reported twice, and one fight often kills several enemies with the same name
+    AddIngameEventToConversation(victimName + " was killed by " + killerName, true)
 EndEvent
 
 

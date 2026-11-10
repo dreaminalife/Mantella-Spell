@@ -14,6 +14,7 @@ $Imports = @(
     "$DepsPath\SkyUI\Scripts\Source",
     "$DepsPath\UIExtensions\scripts\source",
     "$DepsPath\PapyrusUtil\Scripts\Source",
+    "$DepsPath\PapyrusExtender\Source\scripts", # powerofthree's Papyrus Extender, an optional requirement: compile time only, players don't need these
     "$GamePath\Data\Scripts\Source", # SKSE, must come before vanilla
     "$GamePath\Data\Source\Scripts"  # vanilla
 ) -join ";"

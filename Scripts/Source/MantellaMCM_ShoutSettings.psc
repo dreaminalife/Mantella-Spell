@@ -10,8 +10,8 @@ endfunction
 
 function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Joining")
-    mcm.oid_shoutLinesBetweenJoins = mcm.AddSliderOption("Lines Between Joins", repository.shoutLinesBetweenJoins)
     mcm.oid_shoutMaxPeople = mcm.AddSliderOption("Most People in Conversation", repository.shoutMaxPeople)
+    mcm.oid_shoutMaxAnswering = mcm.AddSliderOption("Most People Answering at Once", repository.GetShoutMaxAnswering())
     mcm.oid_shoutNewcomersRemember = mcm.AddTextOption("Newcomers Remember", NewcomersRememberLabel(repository.shoutNewcomersRemember))
     mcm.oid_shoutIncludeFollowers = mcm.AddToggleOption("Include Followers", !repository.shoutExcludeFollowers)
     mcm.oid_showShoutMessages = mcm.AddToggleOption("Show Messages", repository.showShoutMessages)
@@ -30,15 +30,15 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
 endfunction
 
 function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repository) global
-    if optionID == mcm.oid_shoutLinesBetweenJoins
-        mcm.SetSliderDialogStartValue(repository.shoutLinesBetweenJoins)
-        mcm.SetSliderDialogDefaultValue(3)
-        mcm.SetSliderDialogRange(0, 20)
-        mcm.SetSliderDialogInterval(1)
-    elseIf optionID == mcm.oid_shoutMaxPeople
+    if optionID == mcm.oid_shoutMaxPeople
         mcm.SetSliderDialogStartValue(repository.shoutMaxPeople)
         mcm.SetSliderDialogDefaultValue(6)
         mcm.SetSliderDialogRange(2, 10)
+        mcm.SetSliderDialogInterval(1)
+    elseIf optionID == mcm.oid_shoutMaxAnswering
+        mcm.SetSliderDialogStartValue(repository.GetShoutMaxAnswering())
+        mcm.SetSliderDialogDefaultValue(5)
+        mcm.SetSliderDialogRange(1, 10)
         mcm.SetSliderDialogInterval(1)
     elseIf optionID == mcm.oid_shoutHearingDistance
         mcm.SetSliderDialogStartValue(repository.shoutHearingDistance)
@@ -60,10 +60,10 @@ endfunction
 
 function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, MantellaRepository Repository) global
     mcm.SetSliderOptionValue(optionId, value)
-    If optionId == mcm.oid_shoutLinesBetweenJoins
-        Repository.shoutLinesBetweenJoins = value as int
-    elseIf optionId == mcm.oid_shoutMaxPeople
+    If optionId == mcm.oid_shoutMaxPeople
         Repository.shoutMaxPeople = value as int
+    elseIf optionId == mcm.oid_shoutMaxAnswering
+        Repository.shoutMaxAnswering = value as int
     elseIf optionId == mcm.oid_shoutHearingDistance
         Repository.shoutHearingDistance = value
     elseIf optionId == mcm.oid_shoutMaxCandidates

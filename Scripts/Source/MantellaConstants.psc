@@ -79,14 +79,14 @@ string property KEY_SHOUT_ENABLED = "mantella_shout_enabled" auto
 string property KEY_SHOUT_NEARBY_REFIDS = "mantella_shout_nearby_refids" auto
 string property KEY_SHOUT_NEARBY_NAMES = "mantella_shout_nearby_names" auto
 string property KEY_SHOUT_NEARBY_ACTORS = "mantella_shout_nearby_actors" auto ; Full actor settings, sent once for each person new to the list
-string property KEY_SHOUT_LINESBETWEENJOINS = "mantella_shout_lines_between_joins" auto
 string property KEY_SHOUT_MAXPEOPLE = "mantella_shout_max_people" auto
 string property KEY_SHOUT_MAXDESCRIBED = "mantella_shout_max_described" auto ; How many of the nearest people the Game Master gets the bios and memories of
 string property KEY_SHOUT_NEWCOMERSREMEMBER = "mantella_shout_newcomers_remember" auto ; What someone who joins by shouting heard before: 0 since shouting, 1 your last line, 2 everything
-string property KEY_SHOUT_ADDFAILED_REFID = "mantella_shout_add_failed_refid" auto
-string property KEY_SHOUT_ADDFAILED_REASON = "mantella_shout_add_failed_reason" auto ; Why they could not be added, for the log
+string property KEY_SHOUT_MAXANSWERING = "mantella_shout_max_answering" auto ; Most People Answering at Once: how many answer a line said to a group
+string property KEY_SHOUT_ADDFAILED_REFIDS = "mantella_shout_add_failed_refids" auto ; Who of the people asked for could not be added
+string property KEY_SHOUT_ADDFAILED_REASONS = "mantella_shout_add_failed_reasons" auto ; In the same order: why, for the log
 string property KEY_REPLYTYPE_SHOUT_ADDACTOR = "mantella_shout_add_actor" auto
-string property KEY_SHOUT_ADDACTOR_REFID = "mantella_shout_add_actor_refid" auto
+string property KEY_SHOUT_ADDACTOR_REFIDS = "mantella_shout_add_actor_refids" auto ; Everyone the line was spoken to, added in one step
 string property KEY_SHOUT_UNAVAILABLE = "mantella_shout_unavailable" auto
 
 ; Quest tags: the MantellaQuestChecks plugin answers the checks of the quest tag conditions

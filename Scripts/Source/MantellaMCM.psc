@@ -61,12 +61,12 @@ int property oid_randomEventIncludePlayer auto
 int property oid_randomEventMaxDescribed auto
 int property oid_randomEventIncludeFollowers auto
 
-int property oid_shoutLinesBetweenJoins auto
 int property oid_shoutMaxPeople auto
 int property oid_showShoutMessages auto
 int property oid_shoutHearingDistance auto
 int property oid_shoutMaxCandidates auto
 int property oid_shoutMaxListed auto
+int property oid_shoutMaxAnswering auto
 int property oid_shoutRequireLineOfSight auto
 int property oid_shoutNewcomersRemember auto
 int property oid_shoutIncludeFollowers auto
@@ -166,7 +166,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 18
+    Return 19
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -424,10 +424,10 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_nearbyEventIncludeFollowers || optionID == oid_randomEventIncludeFollowers
 		SetInfoText("Whether the event generator may write about your followers nearby who aren't in the conversation. Whether they can join afterwards is up to the Shout Mode page's Include Followers. \nDefault: Off")
 
-	elseIf optionID == oid_shoutLinesBetweenJoins
-		SetInfoText("After someone joins by shouting, how many lines must be spoken before the next person can join. \nDefault: 3")
 	elseIf optionID == oid_shoutMaxPeople
 		SetInfoText("Nobody new joins by shouting once the conversation has this many people, you included. \nDefault: 6")
+	elseIf optionID == oid_shoutMaxAnswering
+		SetInfoText("Say hello to a group and this many of them answer, nearest first. Everyone you speak to joins together and answers before it's your turn again. People you call by name always answer. \nDefault: 5")
 	elseIf optionID == oid_showShoutMessages
 		SetInfoText("Short notes on screen about who is nearby and who joins, to see what's going on.")
 	elseIf optionID == oid_shoutHearingDistance

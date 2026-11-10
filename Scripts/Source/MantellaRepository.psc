@@ -79,12 +79,12 @@ bool property randomEventIncludeFollowers auto
 bool property eventDefaultsAssigned auto ; False on a save the version 18 update never reached, see EnsureEventDefaults
 
 ; Shout: switched on from the Conversation Wheel. See MantellaShout
-int property shoutLinesBetweenJoins auto
 int property shoutMaxPeople auto ; The player included
 bool property showShoutMessages auto
 float property shoutHearingDistance auto ; Meters
 int property shoutMaxCandidates auto ; Most People Described: the nearest people the Game Master gets the bios and memories of
 int property shoutMaxListed auto ; Most People Listed: the nearest people the Game Master may pick, by name
+int property shoutMaxAnswering auto ; Most People Answering at Once: how many answer a line said to a group. 0 on a save that never set it, see GetShoutMaxAnswering
 bool property shoutRequireLineOfSight auto
 int property shoutNewcomersRemember auto ; What someone who joins by shouting heard before: 0 since you started shouting, 1 your last line, 2 the whole conversation
 ; Include Followers on the Shout Mode page, stored the other way round: false (the value of a save that never set it) lets followers join, as before
@@ -184,6 +184,9 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 19 || isFirstInit)
+        shoutMaxAnswering = 5
+    EndIf
     If (lastVersion < 18 || isFirstInit)
         shoutExcludeFollowers = false
         AssignEventDefaults()
@@ -195,7 +198,6 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
         shoutMaxListed = 30
     EndIf
     If (lastVersion < 15 || isFirstInit)
-        shoutLinesBetweenJoins = 3
         shoutMaxPeople = 6
         showShoutMessages = false
         shoutHearingDistance = 20
@@ -357,6 +359,14 @@ Function AssignEventDefaults()
     randomEventMaxDescribed = 6
     randomEventIncludeFollowers = false
     eventDefaultsAssigned = true
+EndFunction
+
+; Most People Answering at Once. SkyUI's version update does not run on every save, so a save that never set it gets the default
+int Function GetShoutMaxAnswering()
+    if shoutMaxAnswering < 1
+        return 5
+    endIf
+    return shoutMaxAnswering
 EndFunction
 
 ; SkyUI's version update does not run on every save. Called when the menu opens and before an event is generated

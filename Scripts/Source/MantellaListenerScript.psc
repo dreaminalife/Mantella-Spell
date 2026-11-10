@@ -229,6 +229,13 @@ Event OnSpellCast(Form akSpell)
 endEvent
 
 
+; Heals and buffs also count as a hit in the game. They are worded as "used ... on", so they don't read like an attack.
+; Mantella merges the events by these wordings (ingame_event_tidy.py), so keep them in sync
+bool Function IsFriendlySpell(Form akSource)
+    Spell sourceSpell = akSource as Spell
+    return sourceSpell && !sourceSpell.IsHostile()
+EndFunction
+
 Event OnHit(ObjectReference akAggressor, Form akSource, Projectile akProjectile, bool abPowerAttack, bool abSneakAttack, bool abBashAttack, bool abHitBlocked)
     if repository.playerTrackingOnHit
         string aggressor = akAggressor.getdisplayname()
@@ -241,6 +248,8 @@ Event OnHit(ObjectReference akAggressor, Form akSource, Projectile akProjectile,
             elseif (hitSource == "None") || (hitSource == "")
                 ;Debug.MessageBox(aggressor + " punched the player.")
                 AddIngameEventToConversation(aggressor + " punched " + getPlayerName(False) + " .", true)
+            elseif IsFriendlySpell(akSource)
+                AddIngameEventToConversation(aggressor + " used " + hitSource + " on " + getPlayerName(False), true)
             else
                 ;Debug.MessageBox(aggressor + " hit the player with " + hitSource)
                 AddIngameEventToConversation(aggressor + " hit " + getPlayerName(False) + " with " + hitSource, true)

@@ -56,8 +56,8 @@ string _shoutNearbyShown = "" ; The names last shown with Show Messages
 Form[] _shoutSentActors ; The people nearby whose full actor settings were sent, so the server has their bios and memories
 int[] _shoutSentHandles ; Their actor settings, in the same order. Someone who then joins uses them instead of being built again
 bool _isShoutNearbyByShoutRules = false ; _shoutNearby was found with the Shout Mode page's rules, so a Nearby or Random Event can use it instead of scanning
-int _shoutAddFailedRefid = 0
-string _shoutAddFailedReason = "" ; Why the person picked could not be added. Sent with the refid
+int[] _shoutAddFailedRefids ; Who of the people picked could not be added. Sent with the next request
+string[] _shoutAddFailedReasons ; Why, in the same order
 bool _isRoomStart = false ; The next conversation starts with only the player, who says something to the room (Just saying something)
 string _roomLine = "" ; What the player typed to say to the room. Sent as soon as the conversation is ready. Empty with a microphone
 bool _isRoomFirstTurn = false ; The room conversation is waiting for the player's first line, which the player already asked to say
@@ -428,7 +428,7 @@ function ContinueConversation(string nextAction, int handle)
         ProcessNpcSpeak(npcActionHandle)
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_SHOUT_ADDACTOR)
-        AddShoutActor(SKSE_HTTP.getInt(handle, mConsts.KEY_SHOUT_ADDACTOR_REFID, 0))
+        AddShoutActors(SKSE_HTTP.getIntArray(handle, mConsts.KEY_SHOUT_ADDACTOR_REFIDS))
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_ENDCONVERSATION)
         if !_hasBeenStopped && Participants.GetSize() < 2 && IsPlayerInConversation()
             Debug.Notification("Nobody answers") ; The player said something to the room. Not when the player ended it
@@ -873,8 +873,8 @@ Function ClearShout()
     _shoutNearbyShown = ""
     _shoutSentActors = _noForms
     _shoutSentHandles = _noInts
-    _shoutAddFailedRefid = 0
-    _shoutAddFailedReason = ""
+    _shoutAddFailedRefids = _noInts
+    _shoutAddFailedReasons = _noStrings
     _isShoutNearbyByShoutRules = false
 EndFunction
 
@@ -942,20 +942,20 @@ Function AddShoutValues(int handle)
     SKSE_HTTP.setStringArray(handle, mConsts.KEY_SHOUT_NEARBY_NAMES, names)
     AddNewShoutActors(handle, nearby)
     AddShoutSettings(handle)
-    if _shoutAddFailedRefid != 0
-        SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_ADDFAILED_REFID, _shoutAddFailedRefid)
-        SKSE_HTTP.setString(handle, mConsts.KEY_SHOUT_ADDFAILED_REASON, _shoutAddFailedReason)
-        _shoutAddFailedRefid = 0
-        _shoutAddFailedReason = ""
+    if _shoutAddFailedRefids && _shoutAddFailedRefids.Length > 0
+        SKSE_HTTP.setIntArray(handle, mConsts.KEY_SHOUT_ADDFAILED_REFIDS, _shoutAddFailedRefids)
+        SKSE_HTTP.setStringArray(handle, mConsts.KEY_SHOUT_ADDFAILED_REASONS, _shoutAddFailedReasons)
+        _shoutAddFailedRefids = _noInts
+        _shoutAddFailedReasons = _noStrings
     endIf
 EndFunction
 
 ; The Shout Mode page's settings. Also sent by a Nearby or Random Event while Shout is off, as MantellaSoftware switches it on with the event
 Function AddShoutSettings(int handle)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_LINESBETWEENJOINS, repository.shoutLinesBetweenJoins)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXPEOPLE, repository.shoutMaxPeople)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXDESCRIBED, repository.shoutMaxCandidates)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_NEWCOMERSREMEMBER, repository.shoutNewcomersRemember)
+    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXANSWERING, repository.GetShoutMaxAnswering())
 EndFunction
 
 ; The full actor settings of the nearest people (Most People Described) who were not sent yet. The server puts their bios and memories in the Game Master's prompt.
@@ -1061,41 +1061,88 @@ Function JoinByShouting(Actor npc)
     _shoutJoiners[_shoutJoiners.Length - 1] = npc
 EndFunction
 
-; The server's Game Master picked someone nearby. They join before they speak. If they no longer can, the server is told with the next request
-Function AddShoutActor(int refid)
-    Actor npc = None
-    int i = 0
-    while _shoutNearby && i < _shoutNearby.Length && !npc
-        if (_shoutNearby[i] as Form).GetFormID() == refid
-            npc = _shoutNearby[i]
-        endIf
-        i += 1
-    endWhile
-    string reason = ""
-    if !_isShouting
-        reason = "Shout is off"
-    elseIf !npc
-        reason = "no longer in the nearby list"
-    else
-        reason = MantellaShout.WhyCantJoin(npc, repository, self)
+; The server's Game Master picked the people nearby a line was spoken to. They all join in one step, before any of them speaks.
+; Whoever no longer can is skipped, and the server is told with the next request
+Function AddShoutActors(int[] refids)
+    int total = 0
+    if refids
+        total = refids.Length
     endIf
-    if reason == ""
-        if repository.showShoutMessages
-            Debug.Notification("Shout: " + npc.GetDisplayName() + " joins the conversation")
+    Actor[] found = PapyrusUtil.ActorArray(total)
+    int[] failedRefids = Utility.CreateIntArray(total)
+    string[] failedReasons = Utility.CreateStringArray(total)
+    int joinCount = 0
+    int failCount = 0
+    int r = 0
+    while r < total
+        int refid = refids[r]
+        Actor npc = None
+        int i = 0
+        while _shoutNearby && i < _shoutNearby.Length && !npc
+            if (_shoutNearby[i] as Form).GetFormID() == refid
+                npc = _shoutNearby[i]
+            endIf
+            i += 1
+        endWhile
+        string reason = ""
+        if !_isShouting
+            reason = "Shout is off"
+        elseIf !npc
+            reason = "no longer in the nearby list"
+        else
+            reason = MantellaShout.WhyCantJoin(npc, repository, self)
         endIf
-        JoinByShouting(npc)
-    else
-        _shoutAddFailedRefid = refid
-        _shoutAddFailedReason = reason
-        if repository.showShoutMessages
-            if npc
-                Debug.Notification("Shout: " + npc.GetDisplayName() + " can't join: " + reason)
-            else
-                Debug.Notification("Shout: the person picked can't join: " + reason)
+        if reason == ""
+            if found.Find(npc) < 0
+                found[joinCount] = npc
+                joinCount += 1
+            endIf
+            if repository.showShoutMessages
+                Debug.Notification("Shout: " + npc.GetDisplayName() + " joins the conversation")
+            endIf
+        else
+            failedRefids[failCount] = refid
+            failedReasons[failCount] = reason
+            failCount += 1
+            if repository.showShoutMessages
+                if npc
+                    Debug.Notification("Shout: " + npc.GetDisplayName() + " can't join: " + reason)
+                else
+                    Debug.Notification("Shout: someone picked can't join: " + reason)
+                endIf
             endIf
         endIf
+        r += 1
+    endWhile
+    if joinCount > 0
+        Actor[] joiners = PapyrusUtil.ActorArray(joinCount)
+        int j = 0
+        while j < joinCount
+            joiners[j] = found[j]
+            j += 1
+        endWhile
+        JoinAllByShouting(joiners)
+    endIf
+    if failCount > 0
+        _shoutAddFailedRefids = Utility.ResizeIntArray(failedRefids, failCount)
+        _shoutAddFailedReasons = Utility.ResizeStringArray(failedReasons, failCount)
     endIf
     RequestContinueConversation()
+EndFunction
+
+; Everyone joins in one step, as people the Game Master brought in by shouting: Private sends them away again. The next request carries them
+Function JoinAllByShouting(Actor[] joiners)
+    AddActors(joiners)
+    if !_shoutJoiners
+        _shoutJoiners = Utility.CreateFormArray(0)
+    endIf
+    int first = _shoutJoiners.Length
+    _shoutJoiners = Utility.ResizeFormArray(_shoutJoiners, first + joiners.Length)
+    int i = 0
+    while i < joiners.Length
+        _shoutJoiners[first + i] = joiners[i]
+        i += 1
+    endWhile
 EndFunction
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

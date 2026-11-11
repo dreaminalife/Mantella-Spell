@@ -94,6 +94,7 @@ Form[] _eventPrebuiltActors ; People the pending event is about, built while the
 int[] _eventPrebuiltHandles ; Their actor settings, in the same order
 Form[] _shoutJoiners ; Who joined by shouting and is still in the conversation. Kept when Shout is switched off
 string _confirmPrivateText = "" ; The text for the message box of ConfirmPrivate while it is open. "" otherwise
+bool _holdForEventText = false ; An NPC Event's text is shown while its conversation starts: nobody speaks until the box is closed
 
 ; Never assigned, so always None: arrays are cleared with these. Assigning None to an array fails in the game ("Cannot cast from None to
 ; Actor[]"), and a local array declared "= None" then can't take an array at all, so it stays None
@@ -401,6 +402,10 @@ function ContinueConversation(string nextAction, int handle)
             endIf
         endif
         ;Debug.Notification("Conversation started.")
+        ; An NPC Event's text is still being read. MantellaSoftware writes and voices the first line meanwhile, so it is ready once the box is closed
+        while _holdForEventText
+            Utility.WaitMenuMode(0.1)
+        endWhile
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCTALK)
         _npcLinesReceived += 1
@@ -856,6 +861,13 @@ Function ShowEventText(string kind, string text)
     while UI.IsMenuOpen("MessageBoxMenu")
         Utility.WaitMenuMode(0.1)
     endWhile
+    _holdForEventText = false
+EndFunction
+
+; An NPC Event's text is about to be shown (ShowEventText) while its conversation starts. Called before the start request is sent, so the
+; reply can't arrive first. Nobody speaks until the box is closed
+Function HoldForEventText()
+    _holdForEventText = true
 EndFunction
 
 ; The names of the first count actors: "Hulda", "Hulda and Mikael", "Hulda, Mikael and Lydia"
@@ -1829,6 +1841,7 @@ Function CleanupConversation()
     _roomLine = ""
     _isRoomConversation = false
     _isGameMasterMode = false
+    _holdForEventText = false ; ShowEventText clears it too. Also here, so a hold left behind can't stop the next conversation from starting
     _shoutJoiners = _noForms
     _actorHandleActors = _noForms ; So the next conversation builds everyone fresh
     _staleActors = _noForms

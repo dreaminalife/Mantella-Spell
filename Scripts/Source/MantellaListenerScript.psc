@@ -898,16 +898,19 @@ Function OnNpcEventResult(int handle)
         Debug.Notification("NPC Event starts: " + names)
     endIf
     string text = SKSE_HTTP.getString(handle, consts.KEY_EVENT_TEXT, "")
-    if text != "" && repository.ShowsEventText("npc")
-        conversation.ShowEventText("npc", text) ; Waits until it is closed. The game is paused meanwhile, so the scene can still start
-        if conversation.IsRunning()
-            return ; The player started a conversation meanwhile
-        endIf
-    endIf
+    bool showText = text != "" && repository.ShowsEventText("npc")
     conversation.Start()
     conversation.SetNpcEvent(eventId)
     conversation.SetNpcEventScan(_eventCandidates, _eventBuiltActors, _eventBuiltHandles) ; So the start doesn't scan and build again
+    if showText
+        conversation.HoldForEventText()
+    endIf
     conversation.StartConversation(participants)
+    if showText
+        ; The conversation is started first, so MantellaSoftware writes and voices the first line while the text is read.
+        ; Waits until the box is closed: nobody speaks before. The game is paused meanwhile
+        conversation.ShowEventText("npc", text)
+    endIf
 EndFunction
 
 ; The server picked the player watching the scene, who joins before anyone speaks again. People nearby join by Shout instead

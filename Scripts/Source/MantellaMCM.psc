@@ -166,7 +166,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 19
+    Return 20
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -399,7 +399,7 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_npcEventRequireLineOfSight
 		SetInfoText("Off: the NPCs in a scene can notice you whenever you are within Hearing Distance and not sneaking. On: you or one of them must also be able to see the other. \nDefault: Off")
 	elseIf optionID == oid_npcEventIncludeFollowers
-		SetInfoText("Whether your active followers can be in the scene while you watch: written about by the event generator, and drawn in by the Game Master. A follower stays with you, so a scene they are in would not end when you walk away. Once you step in, the Shout Mode page's Include Followers decides. \nDefault: Off")
+		SetInfoText("Whether your active followers can be in the scene while you watch: written about by the event generator, and drawn in by the Game Master. A follower stays with you, so a scene they are in doesn't end when you walk away, only when it runs out of lines. Once you step in, the Shout Mode page's Include Followers decides. \nDefault: On")
 	elseIf optionID == oid_npcEventMaxCandidates
 		SetInfoText("How many of the nearest people the event generator gets the bios and memories of. It knows everyone else nearby by name (up to the Shout Mode page's Most People Listed). \nDefault: 6")
 	elseIf optionID == oid_showNpcEventMessages
@@ -422,10 +422,10 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_nearbyEventMaxDescribed || optionID == oid_randomEventMaxDescribed
 		SetInfoText("How many of the nearest people the event generator gets the bios and memories of. It knows everyone else nearby by name. Who counts as nearby comes from the Shout Mode page (Hearing Distance, Must Be in Sight, Most People Listed). \nDefault: 6")
 	elseIf optionID == oid_nearbyEventIncludeFollowers || optionID == oid_randomEventIncludeFollowers
-		SetInfoText("Whether the event generator may write about your followers nearby who aren't in the conversation. Whether they can join afterwards is up to the Shout Mode page's Include Followers. \nDefault: Off")
+		SetInfoText("Whether the event generator may write about your followers nearby who aren't in the conversation. Whether they can join afterwards is up to the Shout Mode page's Include Followers. \nDefault: On")
 
 	elseIf optionID == oid_shoutMaxPeople
-		SetInfoText("Nobody new joins by shouting once the conversation has this many people, you included. \nDefault: 6")
+		SetInfoText("Nobody new joins by shouting once the conversation has this many people, you included. The people a Nearby or Random Event is about still join to react to it. \nDefault: 6")
 	elseIf optionID == oid_shoutMaxAnswering
 		SetInfoText("Say hello to a group and this many of them answer, nearest first. Everyone you speak to joins together and answers before it's your turn again. People you call by name always answer. \nDefault: 5")
 	elseIf optionID == oid_showShoutMessages

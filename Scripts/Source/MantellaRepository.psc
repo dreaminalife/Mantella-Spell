@@ -57,7 +57,7 @@ bool property npcEventEnabled auto
 float property npcEventFrequency auto ; Minutes
 float property npcEventHearingDistance auto ; Meters
 bool property npcEventRequireLineOfSight auto
-bool property npcEventIncludeFollowers auto ; Off by default: a follower in a scene follows the player, so walking away would never end it
+bool property npcEventIncludeFollowers auto ; On by default. A follower in a scene follows the player, so walking away doesn't end it: the scene's line limit does
 int property npcEventMaxCandidates auto ; Most People Described: the nearest people the event generator gets the bios and memories of
 bool property showNpcEventMessages auto
 bool property npcEventAskForHint auto ; A text box asks what should happen when the player starts an NPC Event
@@ -77,6 +77,7 @@ bool property randomEventIncludePlayer auto
 int property randomEventMaxDescribed auto
 bool property randomEventIncludeFollowers auto
 bool property eventDefaultsAssigned auto ; False on a save the version 18 update never reached, see EnsureEventDefaults
+bool property eventFollowerDefaultsAssigned auto ; False on a save that never got the version 20 follower defaults, see EnsureEventDefaults
 
 ; Shout: switched on from the Conversation Wheel. See MantellaShout
 int property shoutMaxPeople auto ; The player included
@@ -184,6 +185,11 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 20 || isFirstInit)
+        if !eventFollowerDefaultsAssigned ; Once only, so a later choice is kept even when an older block runs again (see MantellaMCM.OnConfigOpen)
+            AssignEventFollowerDefaults()
+        endIf
+    EndIf
     If (lastVersion < 19 || isFirstInit)
         shoutMaxAnswering = 5
     EndIf
@@ -215,7 +221,7 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
         npcEventFrequency = 20
         npcEventHearingDistance = 20
         npcEventRequireLineOfSight = false
-        npcEventIncludeFollowers = false
+        npcEventIncludeFollowers = true
         npcEventMaxCandidates = 6
         showNpcEventMessages = false
         MantellaNpcEventHotkey = -1
@@ -352,13 +358,21 @@ Function AssignEventDefaults()
     nearbyEventSendHistory = false
     nearbyEventIncludePlayer = false
     nearbyEventMaxDescribed = 6
-    nearbyEventIncludeFollowers = false
+    nearbyEventIncludeFollowers = true
     randomEventAskForHint = false
     randomEventSendHistory = true
     randomEventIncludePlayer = true
     randomEventMaxDescribed = 6
-    randomEventIncludeFollowers = false
+    randomEventIncludeFollowers = true
     eventDefaultsAssigned = true
+EndFunction
+
+; Followers can be in every kind of event by default (MCM version 20). Until then they were left out by default
+Function AssignEventFollowerDefaults()
+    npcEventIncludeFollowers = true
+    nearbyEventIncludeFollowers = true
+    randomEventIncludeFollowers = true
+    eventFollowerDefaultsAssigned = true
 EndFunction
 
 ; Most People Answering at Once. SkyUI's version update does not run on every save, so a save that never set it gets the default
@@ -373,6 +387,9 @@ EndFunction
 Function EnsureEventDefaults()
     if !eventDefaultsAssigned
         AssignEventDefaults()
+    endIf
+    if !eventFollowerDefaultsAssigned
+        AssignEventFollowerDefaults()
     endIf
 EndFunction
 

@@ -78,6 +78,12 @@ int property randomEventMaxDescribed auto
 bool property randomEventIncludeFollowers auto
 bool property eventDefaultsAssigned auto ; False on a save the version 18 update never reached, see EnsureEventDefaults
 bool property eventFollowerDefaultsAssigned auto ; False on a save that never got the version 20 follower defaults, see EnsureEventDefaults
+; Show What Happened on the Events page, one per kind of event, stored the other way round: false (the value of a save that never set it)
+; shows the event in a message box, so no default has to be assigned
+bool property npcEventHideText auto
+bool property conversationEventHideText auto
+bool property nearbyEventHideText auto
+bool property randomEventHideText auto
 
 ; Shout: switched on from the Conversation Wheel. See MantellaShout
 int property shoutMaxPeople auto ; The player included
@@ -185,6 +191,7 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    ; Version 21 added Show What Happened (npcEventHideText and the others). Stored the other way round, so it needs no default here
     If (lastVersion < 20 || isFirstInit)
         if !eventFollowerDefaultsAssigned ; Once only, so a later choice is kept even when an older block runs again (see MantellaMCM.OnConfigOpen)
             AssignEventFollowerDefaults()
@@ -381,6 +388,20 @@ int Function GetShoutMaxAnswering()
         return 5
     endIf
     return shoutMaxAnswering
+EndFunction
+
+; Show What Happened on the Events page, for "npc", "conversation", "nearby" or "random"
+bool Function ShowsEventText(string kind)
+    if kind == "npc"
+        return !npcEventHideText
+    elseIf kind == "conversation"
+        return !conversationEventHideText
+    elseIf kind == "nearby"
+        return !nearbyEventHideText
+    elseIf kind == "random"
+        return !randomEventHideText
+    endIf
+    return false
 EndFunction
 
 ; SkyUI's version update does not run on every save. Called when the menu opens and before an event is generated

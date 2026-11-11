@@ -836,6 +836,28 @@ Event OnMenuOpen(string menuName)
     endIf
 EndEvent
 
+; Show What Happened on the Events page: what an event's generator wrote, in the same kind of message box as ConfirmPrivate, with an OK button.
+; Waits until the player closes it. The game is paused meanwhile. kind is "npc", "conversation", "nearby" or "random"
+Function ShowEventText(string kind, string text)
+    string title = "Random Event"
+    if kind == "npc"
+        title = "NPC Event"
+    elseIf kind == "conversation"
+        title = "Conversation Event"
+    elseIf kind == "nearby"
+        title = "Nearby Event"
+    endIf
+    Debug.MessageBox(title + "\n\n" + text) ; Doesn't wait: the box opens a moment later
+    float waited = 0.0
+    while !UI.IsMenuOpen("MessageBoxMenu") && waited < 2.0
+        Utility.WaitMenuMode(0.1)
+        waited += 0.1
+    endWhile
+    while UI.IsMenuOpen("MessageBoxMenu")
+        Utility.WaitMenuMode(0.1)
+    endWhile
+EndFunction
+
 ; The names of the first count actors: "Hulda", "Hulda and Mikael", "Hulda, Mikael and Lydia"
 string Function NamesText(Actor[] actors, int count)
     string names = ""
@@ -1622,7 +1644,17 @@ Function OnConversationEventResult(int handle)
         GivePlayerTheTurn()
         return
     endIf
-    Debug.Notification("Something happened") ; Never what happened
+    string text = SKSE_HTTP.getString(handle, mConsts.KEY_EVENT_TEXT, "")
+    if text != "" && repository.ShowsEventText(kind)
+        ; MantellaSoftware already started writing the reactions, so they are ready sooner once the box is closed. Shout's people keep building meanwhile
+        ShowEventText(kind, text)
+        if _hasBeenStopped
+            StopEventBuild()
+            return ; Ended meanwhile
+        endIf
+    else
+        Debug.Notification("Something happened") ; Show What Happened is off: never what happened
+    endIf
     if kind != "conversation"
         if !_isShouting
             ; MantellaSoftware switched Shout on with the event, and its Game Master may already bring in someone the event was about.

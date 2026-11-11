@@ -71,6 +71,7 @@ string property KEY_EVENT_NEARBY_NAMES = "mantella_event_nearby_names" auto
 string property KEY_EVENT_NEARBY_ACTORS = "mantella_event_nearby_actors" auto ; Full actor settings of the nearest who are not in the conversation
 string property KEY_EVENT_MAXDESCRIBED = "mantella_event_max_described" auto
 string property KEY_EVENT_RESULT = "mantella_event_result" auto ; In the reply: true if something happened
+string property KEY_EVENT_TEXT = "mantella_event_text" auto ; In the event and NPC Event replies: what happened, so it can be shown
 string property KEY_EVENT_CANCEL = "mantella_event_cancel" auto ; In an interrupt request: the player ended the conversation while the event was being generated
 string property KEY_GAMEMASTERMODE = "mantella_game_master_mode" auto ; In the start, continue and event replies
 

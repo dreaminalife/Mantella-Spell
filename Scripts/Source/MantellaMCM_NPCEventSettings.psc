@@ -16,6 +16,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_npcEventFrequency = mcm.AddSliderOption("Frequency (minutes)", repository.npcEventFrequency)
     mcm.oid_keymapNpcEventHotkey = mcm.AddKeyMapOption("Check Now", repository.MantellaNpcEventHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
     mcm.oid_npcEventAskForHint = mcm.AddToggleOption("Ask for a Hint", repository.npcEventAskForHint)
+    mcm.oid_npcEventShowText = mcm.AddToggleOption("Show What Happened", !repository.npcEventHideText)
     mcm.oid_npcEventHearingDistance = mcm.AddSliderOption("Hearing Distance (m)", repository.npcEventHearingDistance)
     mcm.oid_npcEventRequireLineOfSight = mcm.AddToggleOption("Require Line of Sight", repository.npcEventRequireLineOfSight)
     mcm.oid_npcEventIncludeFollowers = mcm.AddToggleOption("Include Active Followers", repository.npcEventIncludeFollowers)
@@ -27,6 +28,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     Explain(mcm, "Something happens to the people in your")
     Explain(mcm, "conversation, or around them.")
     mcm.oid_conversationEventAskForHint = mcm.AddToggleOption("Ask for a Hint", repository.conversationEventAskForHint)
+    mcm.oid_conversationEventShowText = mcm.AddToggleOption("Show What Happened", !repository.conversationEventHideText)
     mcm.oid_conversationEventSendHistory = mcm.AddToggleOption("Send the Conversation So Far", repository.conversationEventSendHistory)
     mcm.oid_conversationEventIncludePlayer = mcm.AddToggleOption("Include Me", repository.conversationEventIncludePlayer)
 endfunction
@@ -38,6 +40,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     Explain(mcm, "switched on, so they can join in.")
     ExplainNearby(mcm)
     mcm.oid_nearbyEventAskForHint = mcm.AddToggleOption("Ask for a Hint", repository.nearbyEventAskForHint)
+    mcm.oid_nearbyEventShowText = mcm.AddToggleOption("Show What Happened", !repository.nearbyEventHideText)
     mcm.oid_nearbyEventSendHistory = mcm.AddToggleOption("Send the Conversation So Far", repository.nearbyEventSendHistory)
     mcm.oid_nearbyEventIncludePlayer = mcm.AddToggleOption("Include Me", repository.nearbyEventIncludePlayer)
     mcm.oid_nearbyEventMaxDescribed = mcm.AddSliderOption("Most People Described", repository.nearbyEventMaxDescribed)
@@ -50,6 +53,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     Explain(mcm, "is switched on, so they can join in.")
     ExplainNearby(mcm)
     mcm.oid_randomEventAskForHint = mcm.AddToggleOption("Ask for a Hint", repository.randomEventAskForHint)
+    mcm.oid_randomEventShowText = mcm.AddToggleOption("Show What Happened", !repository.randomEventHideText)
     mcm.oid_randomEventSendHistory = mcm.AddToggleOption("Send the Conversation So Far", repository.randomEventSendHistory)
     mcm.oid_randomEventIncludePlayer = mcm.AddToggleOption("Include Me", repository.randomEventIncludePlayer)
     mcm.oid_randomEventMaxDescribed = mcm.AddSliderOption("Most People Described", repository.randomEventMaxDescribed)
@@ -161,5 +165,18 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_randomEventIncludeFollowers
         Repository.randomEventIncludeFollowers =! Repository.randomEventIncludeFollowers
         mcm.SetToggleOptionValue(optionID, Repository.randomEventIncludeFollowers)
+    ; Show What Happened is stored the other way round (see MantellaRepository)
+    elseIf optionID == mcm.oid_npcEventShowText
+        Repository.npcEventHideText =! Repository.npcEventHideText
+        mcm.SetToggleOptionValue(optionID, !Repository.npcEventHideText)
+    elseIf optionID == mcm.oid_conversationEventShowText
+        Repository.conversationEventHideText =! Repository.conversationEventHideText
+        mcm.SetToggleOptionValue(optionID, !Repository.conversationEventHideText)
+    elseIf optionID == mcm.oid_nearbyEventShowText
+        Repository.nearbyEventHideText =! Repository.nearbyEventHideText
+        mcm.SetToggleOptionValue(optionID, !Repository.nearbyEventHideText)
+    elseIf optionID == mcm.oid_randomEventShowText
+        Repository.randomEventHideText =! Repository.randomEventHideText
+        mcm.SetToggleOptionValue(optionID, !Repository.randomEventHideText)
     endif
 endfunction

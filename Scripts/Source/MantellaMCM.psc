@@ -46,6 +46,10 @@ int property oid_npcEventIncludeFollowers auto
 int property oid_npcEventMaxCandidates auto
 int property oid_showNpcEventMessages auto
 int property oid_npcEventAskForHint auto
+int property oid_npcEventShowText auto
+int property oid_conversationEventShowText auto
+int property oid_nearbyEventShowText auto
+int property oid_randomEventShowText auto
 
 int property oid_conversationEventAskForHint auto
 int property oid_conversationEventSendHistory auto
@@ -166,7 +170,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 20
+    Return 21
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -408,6 +412,11 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Attempts a scene right away. Works even when NPC Events are turned off, and ignores Frequency. NPC Event on the Conversation Wheel does the same.")
 	elseIf optionID == oid_npcEventAskForHint
 		SetInfoText("When you start an NPC Event yourself (hotkey or Conversation Wheel), a text box asks what you'd like to happen, e.g. 'a thief grabs her purse'. Cancel it or leave it empty for a surprise. Scenes that start by themselves never ask. \nDefault: Off")
+
+	elseIf optionID == oid_npcEventShowText
+		SetInfoText("When a scene starts, a message box shows what happens, before the NPCs act it out. The game is paused until you close it. \nDefault: On")
+	elseIf optionID == oid_conversationEventShowText || optionID == oid_nearbyEventShowText || optionID == oid_randomEventShowText
+		SetInfoText("A message box shows what happened, instead of just 'Something happened'. The NPCs react once you close it. \nDefault: On")
 
 	elseIf optionID == oid_conversationEventAskForHint || optionID == oid_nearbyEventAskForHint || optionID == oid_randomEventAskForHint
 		SetInfoText("When you pick the event on the Conversation Wheel, a text box asks what you'd like to happen, e.g. 'a thief grabs her purse'. Cancel it or leave it empty for a surprise. Only the event generator sees it. \nDefault: Off")

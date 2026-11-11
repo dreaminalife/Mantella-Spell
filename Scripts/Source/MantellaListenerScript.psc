@@ -897,6 +897,13 @@ Function OnNpcEventResult(int handle)
     if repository.showNpcEventMessages
         Debug.Notification("NPC Event starts: " + names)
     endIf
+    string text = SKSE_HTTP.getString(handle, consts.KEY_EVENT_TEXT, "")
+    if text != "" && repository.ShowsEventText("npc")
+        conversation.ShowEventText("npc", text) ; Waits until it is closed. The game is paused meanwhile, so the scene can still start
+        if conversation.IsRunning()
+            return ; The player started a conversation meanwhile
+        endIf
+    endIf
     conversation.Start()
     conversation.SetNpcEvent(eventId)
     conversation.SetNpcEventScan(_eventCandidates, _eventBuiltActors, _eventBuiltHandles) ; So the start doesn't scan and build again

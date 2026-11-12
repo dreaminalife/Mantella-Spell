@@ -984,12 +984,10 @@ Function AddShoutValues(int handle)
     endIf
 EndFunction
 
-; The Shout Mode page's settings. Also sent by a Nearby or Random Event while Shout is off, as MantellaSoftware switches it on with the event
+; The Shout Mode page's settings Mantella needs. Also sent by a Nearby or Random Event while Shout is off, as MantellaSoftware switches it on with the event.
+; Most People in Conversation, Most People Answering at Once and Newcomers Remember are Mantella's own settings (Conversation page)
 Function AddShoutSettings(int handle)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXPEOPLE, repository.shoutMaxPeople)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXDESCRIBED, repository.shoutMaxCandidates)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_NEWCOMERSREMEMBER, repository.shoutNewcomersRemember)
-    SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXANSWERING, repository.GetShoutMaxAnswering())
 EndFunction
 
 ; The full actor settings of the nearest people (Most People Described) who were not sent yet. The server puts their bios and memories in the Game Master's prompt.
@@ -1264,8 +1262,6 @@ Function TrySendPendingEvent()
     if _pendingEventHint != ""
         SKSE_HTTP.setString(handle, mConsts.KEY_EVENT_HINT, _pendingEventHint)
     endIf
-    SKSE_HTTP.setBool(handle, mConsts.KEY_EVENT_SENDHISTORY, EventSendsHistory(kind))
-    SKSE_HTTP.setBool(handle, mConsts.KEY_EVENT_INCLUDEPLAYER, EventIncludesPlayer(kind))
     if kind != "conversation"
         ; Before Shout's values, as Shout may send some of the same people. While shouting, Shout's new people go with the event, so its
         ; Game Master knows them from the first pick. Otherwise they go with the first request after the event, and are built meanwhile
@@ -1773,24 +1769,6 @@ bool Function EventAsksForHint(string kind)
         return repository.nearbyEventAskForHint
     endIf
     return repository.randomEventAskForHint
-EndFunction
-
-bool Function EventSendsHistory(string kind)
-    if kind == "conversation"
-        return repository.conversationEventSendHistory
-    elseIf kind == "nearby"
-        return repository.nearbyEventSendHistory
-    endIf
-    return repository.randomEventSendHistory
-EndFunction
-
-bool Function EventIncludesPlayer(string kind)
-    if kind == "conversation"
-        return repository.conversationEventIncludePlayer
-    elseIf kind == "nearby"
-        return repository.nearbyEventIncludePlayer
-    endIf
-    return repository.randomEventIncludePlayer
 EndFunction
 
 int Function EventMaxDescribed(string kind)

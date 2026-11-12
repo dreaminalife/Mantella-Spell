@@ -62,18 +62,13 @@ int property npcEventMaxCandidates auto ; Most People Described: the nearest peo
 bool property showNpcEventMessages auto
 bool property npcEventAskForHint auto ; A text box asks what should happen when the player starts an NPC Event
 
-; Conversation, Nearby and Random Events: picked on the Conversation Wheel during a conversation. Set up on the Events page
+; Conversation, Nearby and Random Events: picked on the Conversation Wheel during a conversation. Set up on the Events page.
+; Send the Conversation So Far and Include Me are Mantella's own settings (Conversation page)
 bool property conversationEventAskForHint auto
-bool property conversationEventSendHistory auto
-bool property conversationEventIncludePlayer auto
 bool property nearbyEventAskForHint auto
-bool property nearbyEventSendHistory auto
-bool property nearbyEventIncludePlayer auto
 int property nearbyEventMaxDescribed auto
 bool property nearbyEventIncludeFollowers auto
 bool property randomEventAskForHint auto
-bool property randomEventSendHistory auto
-bool property randomEventIncludePlayer auto
 int property randomEventMaxDescribed auto
 bool property randomEventIncludeFollowers auto
 bool property eventDefaultsAssigned auto ; False on a save the version 18 update never reached, see EnsureEventDefaults
@@ -85,15 +80,13 @@ bool property conversationEventHideText auto
 bool property nearbyEventHideText auto
 bool property randomEventHideText auto
 
-; Shout: switched on from the Conversation Wheel. See MantellaShout
-int property shoutMaxPeople auto ; The player included
+; Shout: switched on from the Conversation Wheel. See MantellaShout.
+; Most People in Conversation, Most People Answering at Once and Newcomers Remember are Mantella's own settings (Conversation page)
 bool property showShoutMessages auto
 float property shoutHearingDistance auto ; Meters
 int property shoutMaxCandidates auto ; Most People Described: the nearest people the Game Master gets the bios and memories of
 int property shoutMaxListed auto ; Most People Listed: the nearest people the Game Master may pick, by name
-int property shoutMaxAnswering auto ; Most People Answering at Once: how many answer a line said to a group. 0 on a save that never set it, see GetShoutMaxAnswering
 bool property shoutRequireLineOfSight auto
-int property shoutNewcomersRemember auto ; What someone who joins by shouting heard before: 0 since you started shouting, 1 your last line, 2 the whole conversation
 ; Include Followers on the Shout Mode page, stored the other way round: false (the value of a save that never set it) lets followers join, as before
 bool property shoutExcludeFollowers auto
 
@@ -197,21 +190,15 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
             AssignEventFollowerDefaults()
         endIf
     EndIf
-    If (lastVersion < 19 || isFirstInit)
-        shoutMaxAnswering = 5
-    EndIf
+    ; Version 19 added Most People Answering at Once, and 17 Newcomers Remember. Both are Mantella's own settings now
     If (lastVersion < 18 || isFirstInit)
         shoutExcludeFollowers = false
         AssignEventDefaults()
-    EndIf
-    If (lastVersion < 17 || isFirstInit)
-        shoutNewcomersRemember = 0
     EndIf
     If (lastVersion < 16 || isFirstInit)
         shoutMaxListed = 30
     EndIf
     If (lastVersion < 15 || isFirstInit)
-        shoutMaxPeople = 6
         showShoutMessages = false
         shoutHearingDistance = 20
         shoutMaxCandidates = 6
@@ -359,16 +346,10 @@ endFunction
 Function AssignEventDefaults()
     npcEventAskForHint = false
     conversationEventAskForHint = false
-    conversationEventSendHistory = true
-    conversationEventIncludePlayer = true
     nearbyEventAskForHint = false
-    nearbyEventSendHistory = false
-    nearbyEventIncludePlayer = false
     nearbyEventMaxDescribed = 6
     nearbyEventIncludeFollowers = true
     randomEventAskForHint = false
-    randomEventSendHistory = true
-    randomEventIncludePlayer = true
     randomEventMaxDescribed = 6
     randomEventIncludeFollowers = true
     eventDefaultsAssigned = true
@@ -380,14 +361,6 @@ Function AssignEventFollowerDefaults()
     nearbyEventIncludeFollowers = true
     randomEventIncludeFollowers = true
     eventFollowerDefaultsAssigned = true
-EndFunction
-
-; Most People Answering at Once. SkyUI's version update does not run on every save, so a save that never set it gets the default
-int Function GetShoutMaxAnswering()
-    if shoutMaxAnswering < 1
-        return 5
-    endIf
-    return shoutMaxAnswering
 EndFunction
 
 ; Show What Happened on the Events page, for "npc", "conversation", "nearby" or "random"

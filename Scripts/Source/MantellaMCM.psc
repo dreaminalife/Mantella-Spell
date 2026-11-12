@@ -52,27 +52,18 @@ int property oid_nearbyEventShowText auto
 int property oid_randomEventShowText auto
 
 int property oid_conversationEventAskForHint auto
-int property oid_conversationEventSendHistory auto
-int property oid_conversationEventIncludePlayer auto
 int property oid_nearbyEventAskForHint auto
-int property oid_nearbyEventSendHistory auto
-int property oid_nearbyEventIncludePlayer auto
 int property oid_nearbyEventMaxDescribed auto
 int property oid_nearbyEventIncludeFollowers auto
 int property oid_randomEventAskForHint auto
-int property oid_randomEventSendHistory auto
-int property oid_randomEventIncludePlayer auto
 int property oid_randomEventMaxDescribed auto
 int property oid_randomEventIncludeFollowers auto
 
-int property oid_shoutMaxPeople auto
 int property oid_showShoutMessages auto
 int property oid_shoutHearingDistance auto
 int property oid_shoutMaxCandidates auto
 int property oid_shoutMaxListed auto
-int property oid_shoutMaxAnswering auto
 int property oid_shoutRequireLineOfSight auto
-int property oid_shoutNewcomersRemember auto
 int property oid_shoutIncludeFollowers auto
 
 
@@ -395,62 +386,48 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Hotkey checks ignore the NPC Initiative Threshold set in Mantella's settings: the NPC the decision model rates most likely approaches, unless Nobody is its top answer. Only used with a decision model. \nDefault: Off")
 
 	elseIf optionID == oid_npcEventEnabled
-		SetInfoText("Every so often, Mantella invents a scene between some of the NPCs near you, from their bios and memories, and they act it out. You can watch, walk away or step in with the Mantella spell or hotkey. They may also call you in. Uses the NPC Event Generator model and the Game Master set in Mantella's settings.")
+		SetInfoText("Every so often, NPCs near you act out a scene among themselves. Watch, walk away, or step in with the Mantella spell or hotkey. They may also call you over.")
 	elseIf optionID == oid_npcEventFrequency
-		SetInfoText("How often (in real minutes) a new scene is attempted, when no conversation is running. \nDefault: 20")
+		SetInfoText("How often (in real minutes) a new scene is tried, while you're not in a conversation. \nDefault: 20")
 	elseIf optionID == oid_npcEventHearingDistance
-		SetInfoText("How far from you (in meters) NPCs can be to be in the scene: written about by the event generator, or drawn in while you watch. A scene you have not joined ends once you are farther than this from everyone in it, and you can only be noticed within this distance. \nDefault: 20")
+		SetInfoText("How far from you (in meters) NPCs can be to take part. If you haven't stepped in, the scene ends once you're this far from everyone in it. \nDefault: 20")
 	elseIf optionID == oid_npcEventRequireLineOfSight
-		SetInfoText("Off: the NPCs in a scene can notice you whenever you are within Hearing Distance and not sneaking. On: you or one of them must also be able to see the other. \nDefault: Off")
+		SetInfoText("On: the NPCs only notice you if one of you can see the other. Off: they notice you whenever you're close and not sneaking. \nDefault: Off")
 	elseIf optionID == oid_npcEventIncludeFollowers
-		SetInfoText("Whether your active followers can be in the scene while you watch: written about by the event generator, and drawn in by the Game Master. A follower stays with you, so a scene they are in doesn't end when you walk away, only when it runs out of lines. Once you step in, the Shout Mode page's Include Followers decides. \nDefault: On")
+		SetInfoText("Your followers can take part in scenes. A scene with a follower in it keeps going when you walk away. \nDefault: On")
 	elseIf optionID == oid_npcEventMaxCandidates
-		SetInfoText("How many of the nearest people the event generator gets the bios and memories of. It knows everyone else nearby by name (up to the Shout Mode page's Most People Listed). \nDefault: 6")
+		SetInfoText("How many of the nearest people are described in detail when the scene is made up. Others nearby are known by name only. \nDefault: 6")
 	elseIf optionID == oid_showNpcEventMessages
-		SetInfoText("Enable NPC Event debugging messages.")
+		SetInfoText("Show NPC Event debug messages.")
 	elseIf optionID == oid_keymapNpcEventHotkey
-		SetInfoText("Attempts a scene right away. Works even when NPC Events are turned off, and ignores Frequency. NPC Event on the Conversation Wheel does the same.")
+		SetInfoText("Starts a scene right away, even when NPC Event is off. Same as NPC Event on the Conversation Wheel.")
 	elseIf optionID == oid_npcEventAskForHint
-		SetInfoText("When you start an NPC Event yourself (hotkey or Conversation Wheel), a text box asks what you'd like to happen, e.g. 'a thief grabs her purse'. Cancel it or leave it empty for a surprise. Scenes that start by themselves never ask. \nDefault: Off")
+		SetInfoText("When you start a scene yourself, you're asked what should happen, e.g. 'a thief grabs her purse'. Leave it empty for a surprise. \nDefault: Off")
 
 	elseIf optionID == oid_npcEventShowText
-		SetInfoText("When a scene starts, a message box shows what happens, before the NPCs act it out. The game is paused until you close it. \nDefault: On")
+		SetInfoText("Shows what's happening in a message box before the NPCs act it out. \nDefault: On")
 	elseIf optionID == oid_conversationEventShowText || optionID == oid_nearbyEventShowText || optionID == oid_randomEventShowText
-		SetInfoText("A message box shows what happened, instead of just 'Something happened'. The NPCs react once you close it. \nDefault: On")
+		SetInfoText("Shows what happened in a message box, instead of just 'Something happened'. \nDefault: On")
 
 	elseIf optionID == oid_conversationEventAskForHint || optionID == oid_nearbyEventAskForHint || optionID == oid_randomEventAskForHint
-		SetInfoText("When you pick the event on the Conversation Wheel, a text box asks what you'd like to happen, e.g. 'a thief grabs her purse'. Cancel it or leave it empty for a surprise. Only the event generator sees it. \nDefault: Off")
-	elseIf optionID == oid_conversationEventSendHistory || optionID == oid_randomEventSendHistory
-		SetInfoText("The event generator also gets the recent lines of the conversation, the same ones the Game Master sees. \nDefault: On")
-	elseIf optionID == oid_nearbyEventSendHistory
-		SetInfoText("The event generator also gets the recent lines of the conversation, the same ones the Game Master sees. \nDefault: Off")
-	elseIf optionID == oid_conversationEventIncludePlayer || optionID == oid_randomEventIncludePlayer
-		SetInfoText("You're in the names the event generator gets, so the event can happen to you. It never writes what you do, say or feel. \nDefault: On")
-	elseIf optionID == oid_nearbyEventIncludePlayer
-		SetInfoText("You're in the names the event generator gets, so the event can happen to you. It never writes what you do, say or feel. \nDefault: Off")
+		SetInfoText("When you pick this event on the Conversation Wheel, you're asked what should happen, e.g. 'a thief grabs her purse'. Leave it empty for a surprise. \nDefault: Off")
 	elseIf optionID == oid_nearbyEventMaxDescribed || optionID == oid_randomEventMaxDescribed
-		SetInfoText("How many of the nearest people the event generator gets the bios and memories of. It knows everyone else nearby by name. Who counts as nearby comes from the Shout Mode page (Hearing Distance, Must Be in Sight, Most People Listed). \nDefault: 6")
+		SetInfoText("How many of the nearest people are described in detail when the event is made up. Others nearby are known by name only. How far 'nearby' reaches is set on the Shout Mode page. \nDefault: 6")
 	elseIf optionID == oid_nearbyEventIncludeFollowers || optionID == oid_randomEventIncludeFollowers
-		SetInfoText("Whether the event generator may write about your followers nearby who aren't in the conversation. Whether they can join afterwards is up to the Shout Mode page's Include Followers. \nDefault: On")
+		SetInfoText("Your followers nearby can be part of the event. \nDefault: On")
 
-	elseIf optionID == oid_shoutMaxPeople
-		SetInfoText("Nobody new joins by shouting once the conversation has this many people, you included. The people a Nearby or Random Event is about still join to react to it. \nDefault: 6")
-	elseIf optionID == oid_shoutMaxAnswering
-		SetInfoText("Say hello to a group and this many of them answer, nearest first. Everyone you speak to joins together and answers before it's your turn again. People you call by name always answer. \nDefault: 5")
 	elseIf optionID == oid_showShoutMessages
-		SetInfoText("Short notes on screen about who is nearby and who joins, to see what's going on.")
+		SetInfoText("Short notes on screen about who is nearby and who joins.")
 	elseIf optionID == oid_shoutHearingDistance
 		SetInfoText("How far from you (in meters) people can be and still hear you. \nDefault: 20")
 	elseIf optionID == oid_shoutMaxCandidates
-		SetInfoText("How many of the nearest people the Game Master knows in full: their bio and memories, to pick the right person to answer. The others nearby it only knows by name. \nDefault: 6")
+		SetInfoText("How many of the nearest people are known in detail, to pick the right one to answer. Others nearby are known by name only. \nDefault: 6")
 	elseIf optionID == oid_shoutMaxListed
-		SetInfoText("How many of the nearest people the Game Master can pick from, by name. Call someone by name and they can answer, even from across the room. \nDefault: 30")
+		SetInfoText("How many of the nearest people can answer. Call someone by name and they can answer, even from across the room. \nDefault: 30")
 	elseIf optionID == oid_shoutRequireLineOfSight
-		SetInfoText("Off: everyone within Hearing Distance can join. On: they also need to be in sight. Either you can see them or they can see you. \nDefault: Off")
+		SetInfoText("On: people must also be in sight to join (you see them, or they see you). Off: anyone within Hearing Distance can join. \nDefault: Off")
 	elseIf optionID == oid_shoutIncludeFollowers
-		SetInfoText("Whether your active followers nearby can join by shouting. Nearby and Random Events have their own Include Followers for what the event is written about. \nDefault: On")
-	elseIf optionID == oid_shoutNewcomersRemember
-		SetInfoText("Click to change what someone who joins by shouting remembers. Since Shout: what was said since you started shouting. Last Line: your last line and the replies to it. Everything: the whole conversation. \nDefault: Since Shout")
+		SetInfoText("Your followers nearby can join in. \nDefault: On")
 
     elseIf optionID == oid_playerCharacterDescription1	
 		SetInfoText("The description of the player used in the prompt for the LLM. This is not a bio of the player. \nTry to only put things here that are obvious about your character when the NPC meets them. e.g.'A tall and broad Nord man with long red hair''")

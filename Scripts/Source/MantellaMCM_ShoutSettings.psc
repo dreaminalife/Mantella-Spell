@@ -10,11 +10,12 @@ endfunction
 
 function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Joining")
-    mcm.oid_shoutMaxPeople = mcm.AddSliderOption("Most People in Conversation", repository.shoutMaxPeople)
-    mcm.oid_shoutMaxAnswering = mcm.AddSliderOption("Most People Answering at Once", repository.GetShoutMaxAnswering())
-    mcm.oid_shoutNewcomersRemember = mcm.AddTextOption("Newcomers Remember", NewcomersRememberLabel(repository.shoutNewcomersRemember))
     mcm.oid_shoutIncludeFollowers = mcm.AddToggleOption("Include Followers", !repository.shoutExcludeFollowers)
     mcm.oid_showShoutMessages = mcm.AddToggleOption("Show Messages", repository.showShoutMessages)
+    mcm.AddEmptyOption()
+    ; Most People in Conversation, Most People Answering at Once and Newcomers Remember moved to Mantella, as only Mantella uses them
+    mcm.AddTextOption("More Shout options: Mantella's settings,", "", mcm.OPTION_FLAG_DISABLED)
+    mcm.AddTextOption("Conversation page.", "", mcm.OPTION_FLAG_DISABLED)
 endfunction
 
 function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
@@ -24,23 +25,12 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_shoutMaxCandidates = mcm.AddSliderOption("Most People Described", repository.shoutMaxCandidates)
     mcm.oid_shoutRequireLineOfSight = mcm.AddToggleOption("Must Be in Sight", repository.shoutRequireLineOfSight)
     ; Nearby and Random Events (Events page) find the people nearby with these too
-    mcm.AddTextOption("Hearing Distance, Most People Listed and", "", mcm.OPTION_FLAG_DISABLED)
-    mcm.AddTextOption("Must Be in Sight are also used by", "", mcm.OPTION_FLAG_DISABLED)
-    mcm.AddTextOption("Nearby and Random Events", "", mcm.OPTION_FLAG_DISABLED)
+    mcm.AddTextOption("Also decides who is nearby for", "", mcm.OPTION_FLAG_DISABLED)
+    mcm.AddTextOption("Nearby and Random Events.", "", mcm.OPTION_FLAG_DISABLED)
 endfunction
 
 function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repository) global
-    if optionID == mcm.oid_shoutMaxPeople
-        mcm.SetSliderDialogStartValue(repository.shoutMaxPeople)
-        mcm.SetSliderDialogDefaultValue(6)
-        mcm.SetSliderDialogRange(2, 10)
-        mcm.SetSliderDialogInterval(1)
-    elseIf optionID == mcm.oid_shoutMaxAnswering
-        mcm.SetSliderDialogStartValue(repository.GetShoutMaxAnswering())
-        mcm.SetSliderDialogDefaultValue(5)
-        mcm.SetSliderDialogRange(1, 10)
-        mcm.SetSliderDialogInterval(1)
-    elseIf optionID == mcm.oid_shoutHearingDistance
+    if optionID == mcm.oid_shoutHearingDistance
         mcm.SetSliderDialogStartValue(repository.shoutHearingDistance)
         mcm.SetSliderDialogDefaultValue(20)
         mcm.SetSliderDialogRange(5, 100)
@@ -60,11 +50,7 @@ endfunction
 
 function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, MantellaRepository Repository) global
     mcm.SetSliderOptionValue(optionId, value)
-    If optionId == mcm.oid_shoutMaxPeople
-        Repository.shoutMaxPeople = value as int
-    elseIf optionId == mcm.oid_shoutMaxAnswering
-        Repository.shoutMaxAnswering = value as int
-    elseIf optionId == mcm.oid_shoutHearingDistance
+    If optionId == mcm.oid_shoutHearingDistance
         Repository.shoutHearingDistance = value
     elseIf optionId == mcm.oid_shoutMaxCandidates
         Repository.shoutMaxCandidates = value as int
@@ -83,19 +69,5 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_showShoutMessages
         Repository.showShoutMessages =! Repository.showShoutMessages
         mcm.SetToggleOptionValue(optionID, Repository.showShoutMessages)
-    elseIf optionID == mcm.oid_shoutNewcomersRemember
-        ; Each click moves to the next choice
-        Repository.shoutNewcomersRemember = (Repository.shoutNewcomersRemember + 1) % 3
-        mcm.SetTextOptionValue(optionID, NewcomersRememberLabel(Repository.shoutNewcomersRemember))
     endif
-endfunction
-
-; The name shown for each Newcomers Remember choice. The number is what the server gets
-string function NewcomersRememberLabel(int choice) global
-    if choice == 1
-        return "Last Line"
-    elseIf choice == 2
-        return "Everything"
-    endif
-    return "Since Shout"
 endfunction

@@ -72,6 +72,7 @@ Event OnPlayerLoadGame()
     RegisterForModEvent("Mantella_NpcInitiativeHotkey", "OnNpcInitiativeHotkey")
     RegisterForModEvent("Mantella_NpcEventHotkey", "OnNpcEventHotkey")
     RegisterForModEvent("Mantella_EventTest", "OnEventTest")
+    RegisterForModEvent("Mantella_TalkTest", "OnTalkTest")
     RegisterForModEvent(NPC_EVENT_BUILD_EVENT(), "OnNpcEventBuild")
     RegisterForMenu("Loading Menu")
     MantellaKillEvents.Register(self) ; Again here, in case this save never ran OnInit with it, or the extender was only just installed
@@ -109,6 +110,10 @@ event OnUpdate()
     if repository.eventTestRun != 0 ; Set from the console by the in-game test's batch file
         repository.eventTestRun = 0
         SendModEvent("Mantella_EventTest") ; Runs on its own thread, so the ticks go on during the test
+    endIf
+    if repository.talkTestRun != 0 ; Set from the console by the in-game test of the talk settings
+        repository.talkTestRun = 0
+        SendModEvent("Mantella_TalkTest")
     endIf
     float now = Utility.GetCurrentRealTime()
     if conversation.IsRunning()
@@ -643,6 +648,10 @@ EndEvent
 
 Event OnEventTest(string eventName, string strArg, float numArg, Form sender)
     MantellaEventTest.Run(repository, conversation, self)
+EndEvent
+
+Event OnTalkTest(string eventName, string strArg, float numArg, Form sender)
+    MantellaTalkTest.Run(repository, conversation, self)
 EndEvent
 
 ; Returns true if a check was sent to the server

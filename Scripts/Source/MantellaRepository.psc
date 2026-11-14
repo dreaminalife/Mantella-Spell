@@ -81,7 +81,7 @@ bool property nearbyEventHideText auto
 bool property randomEventHideText auto
 
 ; Shout: switched on from the Conversation Wheel. See MantellaShout.
-; Most People in Conversation, Most People Answering at Once and Newcomers Remember are Mantella's own settings (Conversation page)
+; Most People in Conversation, People Who Must Answer a Group Line and Newcomers Remember are Mantella's own settings (Conversation page)
 bool property showShoutMessages auto
 float property shoutHearingDistance auto ; Meters
 int property shoutMaxCandidates auto ; Most People Described: the nearest people the Game Master gets the bios and memories of
@@ -159,6 +159,7 @@ bool property NPCdebugSelectModeEnabled auto
 ; bool restartMantellaExe = False
 int property HttpPort auto
 int property eventTestRun auto ; Set to 1 from the console (setpqv MantellaQuest eventTestRun 1) to run the in-game test of the events. See MantellaEventTest
+int property talkTestRun auto ; Set to 1 from the console (setpqv MantellaQuest talkTestRun 1) to run the in-game test of the talk settings. See MantellaTalkTest
 
 ; The Conversation Wheel while it is open (see MantellaWheel)
 bool _isWheelOpen = false
@@ -190,7 +191,7 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
             AssignEventFollowerDefaults()
         endIf
     EndIf
-    ; Version 19 added Most People Answering at Once, and 17 Newcomers Remember. Both are Mantella's own settings now
+    ; Version 19 added People Who Must Answer a Group Line, and 17 Newcomers Remember. Both are Mantella's own settings now
     If (lastVersion < 18 || isFirstInit)
         shoutExcludeFollowers = false
         AssignEventDefaults()

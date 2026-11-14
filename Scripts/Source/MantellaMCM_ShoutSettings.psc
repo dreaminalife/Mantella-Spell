@@ -13,7 +13,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_shoutIncludeFollowers = mcm.AddToggleOption("Include Followers", !repository.shoutExcludeFollowers)
     mcm.oid_showShoutMessages = mcm.AddToggleOption("Show Messages", repository.showShoutMessages)
     mcm.AddEmptyOption()
-    ; Most People in Conversation, Most People Answering at Once and Newcomers Remember moved to Mantella, as only Mantella uses them
+    ; Most People in Conversation, People Who Must Answer a Group Line and Newcomers Remember moved to Mantella, as only Mantella uses them
     mcm.AddTextOption("More Shout options: Mantella's settings,", "", mcm.OPTION_FLAG_DISABLED)
     mcm.AddTextOption("Conversation page.", "", mcm.OPTION_FLAG_DISABLED)
 endfunction

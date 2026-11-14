@@ -191,6 +191,17 @@ bool Function IsPlayersTurn()
     return _does_accept_player_input
 EndFunction
 
+; Says the line as if the player typed it in the text box. Only during the player's turn. Used by the in-game test of the talk settings (MantellaTalkTest)
+Function SayAsPlayer(string line)
+    if !_does_accept_player_input || line == ""
+        return
+    endIf
+    BuildContext() ; As the text box does before it opens
+    sendRequestForPlayerInput(line, updateContext=False)
+    _does_accept_player_input = False
+    ClearRepeatingMessage()
+EndFunction
+
 ; How many NPC lines have arrived from MantellaSoftware. Used by the in-game test (MantellaEventTest) to pick an event while one is spoken
 int _npcLinesReceived = 0
 int Function NpcLinesReceived()
@@ -985,7 +996,7 @@ Function AddShoutValues(int handle)
 EndFunction
 
 ; The Shout Mode page's settings Mantella needs. Also sent by a Nearby or Random Event while Shout is off, as MantellaSoftware switches it on with the event.
-; Most People in Conversation, Most People Answering at Once and Newcomers Remember are Mantella's own settings (Conversation page)
+; Most People in Conversation, People Who Must Answer a Group Line and Newcomers Remember are Mantella's own settings (Conversation page)
 Function AddShoutSettings(int handle)
     SKSE_HTTP.setInt(handle, mConsts.KEY_SHOUT_MAXDESCRIBED, repository.shoutMaxCandidates)
 EndFunction

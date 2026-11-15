@@ -2,41 +2,55 @@ FormKey: 000D62:Mantella.esp
 EditorID: MantellaQuest
 VirtualMachineAdapter:
   Scripts:
+  - Name: MantellaLocationUtils
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: PlayerRef
+      Object: 000014:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: TimeScale
+      Object: 00003A:Skyrim.esm
   - Name: mantellarepository
     Properties:
     - MutagenObjectType: ScriptObjectProperty
       Name: fac_AllowInventory
       Object: 15DD3D:Mantella.esp
     - MutagenObjectType: ScriptObjectProperty
-      Name: PlayerRef
-      Object: 000014:Skyrim.esm
-    - MutagenObjectType: ScriptObjectProperty
-      Name: giafac_AllowDialogue
-      Object: 042519:Mantella.esp
-    - MutagenObjectType: ScriptObjectProperty
-      Name: MantellaSpell
-      Object: 0022EF:Mantella.esp
-    - MutagenObjectType: ScriptObjectProperty
-      Name: giafac_Following
-      Object: 003806:Mantella.esp
+      Name: gia_FollowerQst
+      Object: 021211:Mantella.esp
     - MutagenObjectType: ScriptObjectProperty
       Name: giafac_AllowAnger
       Object: 042517:Mantella.esp
     - MutagenObjectType: ScriptObjectProperty
-      Name: MantellaRemoveNpcSpell
-      Object: 0CB02E:Mantella.esp
+      Name: giafac_AllowDialogue
+      Object: 042519:Mantella.esp
     - MutagenObjectType: ScriptObjectProperty
       Name: giafac_AllowFollower
       Object: 03D416:Mantella.esp
     - MutagenObjectType: ScriptObjectProperty
-      Name: MantellaEndSpell
-      Object: 01EE0C:Mantella.esp
+      Name: giafac_Following
+      Object: 003806:Mantella.esp
     - MutagenObjectType: ScriptObjectProperty
       Name: giafac_Mantella
       Object: 000803:Mantella.esp
     - MutagenObjectType: ScriptObjectProperty
-      Name: gia_FollowerQst
-      Object: 021211:Mantella.esp
+      Name: MantellaCombatTeamA
+      Object: 1FFD48:Mantella.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: MantellaCombatTeamB
+      Object: 1FFD49:Mantella.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: MantellaEndSpell
+      Object: 01EE0C:Mantella.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: MantellaRemoveNpcSpell
+      Object: 0CB02E:Mantella.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: MantellaSpell
+      Object: 0022EF:Mantella.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: PlayerRef
+      Object: 000014:Skyrim.esm
   FileName: ''
   Aliases:
   - Property:
@@ -47,46 +61,69 @@ VirtualMachineAdapter:
     - Name: MantellaListenerScript
       Properties:
       - MutagenObjectType: ScriptObjectProperty
-        Name: PlayerRef
-        Object: 000014:Skyrim.esm
+        Name: conversation
+        Object: 03D41A:Mantella.esp
+      - MutagenObjectType: ScriptObjectProperty
+        Name: MantellaActorPicker
+        Object: 03A314:Mantella.esp
+      - MutagenObjectType: ScriptObjectProperty
+        Name: MantellaEndPower
+        Object: 02E113:Mantella.esp
       - MutagenObjectType: ScriptObjectProperty
         Name: MantellaEndSpell
         Object: 01EE0C:Mantella.esp
       - MutagenObjectType: ScriptObjectProperty
-        Name: MantellaRemoveNpcPower
-        Object: 0CB032:Mantella.esp
+        Name: MantellaMCMQuest
+        Object: 025F12:Mantella.esp
       - MutagenObjectType: ScriptObjectProperty
-        Name: MantellaSpell
-        Object: 0022EF:Mantella.esp
+        Name: MantellaNearbyActors
+        Object: 21414C:Mantella.esp
       - MutagenObjectType: ScriptObjectProperty
         Name: MantellaPower
         Object: 000805:Mantella.esp
       - MutagenObjectType: ScriptObjectProperty
-        Name: conversation
-        Object: 03D41A:Mantella.esp
-      - MutagenObjectType: ScriptObjectProperty
-        Name: MantellaMCMQuest
-        Object: 025F12:Mantella.esp
+        Name: MantellaRemoveNpcPower
+        Object: 0CB032:Mantella.esp
       - MutagenObjectType: ScriptObjectProperty
         Name: MantellaRemoveNpcSpell
         Object: 0CB02E:Mantella.esp
       - MutagenObjectType: ScriptObjectProperty
-        Name: MantellaEndPower
-        Object: 02E113:Mantella.esp
+        Name: MantellaSpell
+        Object: 0022EF:Mantella.esp
+      - MutagenObjectType: ScriptObjectProperty
+        Name: NearbyActor1
+        Object: 21414C:Mantella.esp
+        Alias: 0
+      - MutagenObjectType: ScriptObjectProperty
+        Name: NearbyActor2
+        Object: 21414C:Mantella.esp
+        Alias: 6
+      - MutagenObjectType: ScriptObjectProperty
+        Name: NearbyActor3
+        Object: 21414C:Mantella.esp
+        Alias: 7
+      - MutagenObjectType: ScriptObjectProperty
+        Name: NearbyActor4
+        Object: 21414C:Mantella.esp
+        Alias: 8
+      - MutagenObjectType: ScriptObjectProperty
+        Name: NearbyActor5
+        Object: 21414C:Mantella.esp
+        Alias: 9
+      - MutagenObjectType: ScriptObjectProperty
+        Name: PlayerRef
+        Object: 000014:Skyrim.esm
+      - MutagenObjectType: ScriptObjectProperty
+        Name: PotentialActor1
+        Object: 03A314:Mantella.esp
+        Alias: 0
       - MutagenObjectType: ScriptObjectProperty
         Name: PotentialActor2
         Object: 03A314:Mantella.esp
         Alias: 2
       - MutagenObjectType: ScriptObjectProperty
-        Name: MantellaActorPicker
-        Object: 03A314:Mantella.esp
-      - MutagenObjectType: ScriptObjectProperty
         Name: repository
         Object: 000D62:Mantella.esp
-      - MutagenObjectType: ScriptObjectProperty
-        Name: PotentialActor1
-        Object: 03A314:Mantella.esp
-        Alias: 0
 Flags:
 - StartGameEnabled
 - 0x10

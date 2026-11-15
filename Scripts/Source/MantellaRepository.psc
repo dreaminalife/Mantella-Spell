@@ -12,6 +12,8 @@ Faction Property giafac_AllowFollower  Auto ;gia
 Faction Property giafac_AllowAnger  Auto ;gia
 ;Faction Property giafac_AllowForgive  Auto ;gia
 Faction Property fac_AllowInventory  Auto
+Faction Property MantellaCombatTeamA  Auto ; the two sides of a fight started by the Attack action
+Faction Property MantellaCombatTeamB  Auto
 Faction Property giafac_AllowDialogue  Auto ;gia
 Faction Property giafac_Following  Auto ;gia
 Faction Property giafac_Mantella  Auto ;gia
@@ -160,6 +162,7 @@ bool property NPCdebugSelectModeEnabled auto
 int property HttpPort auto
 int property eventTestRun auto ; Set to 1 from the console (setpqv MantellaQuest eventTestRun 1) to run the in-game test of the events. See MantellaEventTest
 int property talkTestRun auto ; Set to 1 from the console (setpqv MantellaQuest talkTestRun 1) to run the in-game test of the talk settings. See MantellaTalkTest
+int property actionTestRun auto ; Set to 1 from the console (setpqv MantellaQuest actionTestRun 1) to run the in-game test of the NPC actions. See MantellaActionTest
 
 ; The Conversation Wheel while it is open (see MantellaWheel)
 bool _isWheelOpen = false

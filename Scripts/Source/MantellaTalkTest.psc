@@ -10,14 +10,14 @@ EndFunction
 
 Function Run(MantellaRepository repository, MantellaConversation conversation, MantellaListenerScript listener) global
     if conversation.IsRunning()
-        Note("end the conversation first")
+        Stop("end the conversation first")
         return
     endIf
     Note("starting")
     Utility.Wait(3.0) ; The place has just loaded
     Actor[] people = MantellaShout.FindNearbyWith(repository, conversation, 20.0, false, false, 10)
     if people.Length < 3
-        Note("it needs at least 3 people within 20 m, found " + people.Length)
+        Stop("it needs at least 3 people within 20 m, found " + people.Length)
         return
     endIf
     Actor player = Game.GetPlayer()
@@ -46,10 +46,8 @@ Function Run(MantellaRepository repository, MantellaConversation conversation, M
     endIf
 
     ; 4. A watched NPC Event (its own settings): the player watches until the scene ends
-    string reason = listener.TryNpcEventCheck(true)
-    if reason != ""
-        Note("NPC Event: " + reason)
-    elseIf MantellaEventTest.WaitForNpcEvent(conversation)
+    string reason = MantellaEventTest.StartNpcEvent(listener, conversation)
+    if reason == ""
         Note("watching the NPC Event until it ends")
         float waited = 0.0
         while conversation.IsRunning() && waited < TIMEOUT() * 3
@@ -57,9 +55,9 @@ Function Run(MantellaRepository repository, MantellaConversation conversation, M
             waited += 1.0
         endWhile
     else
-        Note("no NPC Event this time. Run the test again for this part")
+        Note("no NPC Event after 3 tries (" + reason + "). Run the test again for this part")
     endIf
-    Note("done. Now run the check")
+    Done()
 EndFunction
 
 ; Until it is the player's turn (in Director Mode: when the player can direct again). As long as NPC lines keep arriving, it keeps waiting:
@@ -93,6 +91,17 @@ Function Say(MantellaConversation conversation, string line) global
 EndFunction
 
 ; On screen, and in the Papyrus log (Papyrus.0.log) when Papyrus logging is on
+; Stays on screen until closed, so the end isn't missed
+Function Done() global
+    Stop("done. Now press Enter in the window of talk_settings_ingame.py")
+EndFunction
+
+; A last note that stays on screen until closed
+Function Stop(string text) global
+    Note(text)
+    Debug.MessageBox("Talk test: " + text)
+EndFunction
+
 Function Note(string text) global
     Debug.Notification("Talk test: " + text)
     Debug.Trace("Talk test: " + text)

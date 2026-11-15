@@ -6,6 +6,7 @@ Scriptname MantellaInterface extends Quest
 
 ; Prefix for any events raised by Mantella when it receives an action. See example below for usage
 string property EVENT_ACTIONS_PREFIX = "MantellaConversation_Action_" auto
+string property EVENT_ADVANCED_ACTIONS_PREFIX = "MantellaConversation_Advanced_Action_" auto
 
 ; Called when a conversation is started
 string property EVENT_CONVERSATION_STARTED = "MantellaConversation_Started" auto
@@ -18,6 +19,9 @@ string property EVENT_CONVERSATION_NPC_REMOVED = "MantellaConversation_NPC_Remov
 
 ; Mantella itself listens for this event to add ingame events for the next user message. Don't use this directly, use the 'AddMantellaEvent' function below
 string property EVENT_ADD_EVENT = "MantellaAddEvent" auto
+
+; When an action requires a response (in-game events added), Mantella will wait for this event before continuing the conversation
+string property EVENT_ACTION_RESPONSE_COMPLETED = "Mantella_ActionResponseCompleted" auto
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;           Example           ;
@@ -34,6 +38,7 @@ string property EVENT_ADD_EVENT = "MantellaAddEvent" auto
 ; event OnMyActionIdentifierReceived(Form speaker)
 ;     Actor acting = speaker as Actor
 ;     EventInterface.AddMantellaEvent(acting.GetDisplayName() + "just performed MyActionIdentifier"
+;     EventInterface.MarkActionResponseCompleted("myActionIdentifier") ; If this action requires the in-game event to be seen before continuing the conversation
 ; endEvent
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -46,4 +51,13 @@ Function AddMantellaEvent(string text)
         ModEvent.PushString(handle, text)
         ModEvent.Send(handle)
     endIf 
+EndFunction
+
+
+Function MarkActionResponseCompleted(string actionIdentifier)
+    int handle = ModEvent.Create(EVENT_ACTION_RESPONSE_COMPLETED)
+    if (handle)
+        ModEvent.PushString(handle, actionIdentifier)
+        ModEvent.Send(handle)
+    endIf
 EndFunction

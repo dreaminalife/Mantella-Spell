@@ -4,7 +4,7 @@ Flags:
 - AllowSwimming
 Type: Package
 PreferredSpeed: Run
-InteruptFlags:
+InterruptFlags:
 - ObserveCombatBehavior
 - GreetCorpseBehavior
 - ReactionToPlayerActions
@@ -18,16 +18,21 @@ InteruptFlags:
 - 0x4000
 - 0x8000
 ScheduleMonth: -1
-ScheduleDayOfWeek: 255
+ScheduleDayOfWeek: Any
 ScheduleHour: -1
 ScheduleMinute: -1
 Unknown3: 0x000000
 Conditions:
 - MutagenObjectType: ConditionFloat
+  CompareOperator: NotEqualTo
+  Data:
+    MutagenObjectType: GetInFactionConditionData
+    Faction: 223451:Mantella.esp
+  ComparisonValue: 1
+- MutagenObjectType: ConditionFloat
   Data:
     MutagenObjectType: GetVMQuestVariableConditionData
     Quest: 000D62:Mantella.esp
-    SecondUnusedIntParameter: 122292992
     VariableName: ::NPCPackage_var
   ComparisonValue: 1
 - MutagenObjectType: ConditionFloat

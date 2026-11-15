@@ -10,6 +10,13 @@ MantellaRepository property repository auto
 Quest Property MantellaActorPicker auto  
 ReferenceAlias Property PotentialActor1 auto  
 ReferenceAlias Property PotentialActor2 auto  
+
+Quest Property MantellaNearbyActors Auto
+ReferenceAlias Property NearbyActor1 Auto
+ReferenceAlias Property NearbyActor2 Auto
+ReferenceAlias Property NearbyActor3 Auto
+ReferenceAlias Property NearbyActor4 Auto
+ReferenceAlias Property NearbyActor5 Auto
 MantellaConversation Property conversation auto
 MantellaMCM Property MantellaMCMQuest auto
 Actor Property PlayerRef Auto
@@ -73,6 +80,7 @@ Event OnPlayerLoadGame()
     RegisterForModEvent("Mantella_NpcEventHotkey", "OnNpcEventHotkey")
     RegisterForModEvent("Mantella_EventTest", "OnEventTest")
     RegisterForModEvent("Mantella_TalkTest", "OnTalkTest")
+    RegisterForModEvent("Mantella_ActionTest", "OnActionTest")
     RegisterForModEvent(NPC_EVENT_BUILD_EVENT(), "OnNpcEventBuild")
     RegisterForMenu("Loading Menu")
     MantellaKillEvents.Register(self) ; Again here, in case this save never ran OnInit with it, or the extender was only just installed
@@ -106,6 +114,32 @@ EndFunction
 float tickSeconds = 5.0
 float _lastRadiantAttemptTime = 0.0
 
+Actor[] Function ScanNearbyActors()
+    MantellaNearbyActors.start()
+
+    Actor[] nearbyActors = new Actor[5]
+    
+    if (NearbyActor1.GetReference() as Actor)
+        nearbyActors[0] = NearbyActor1.GetReference() as Actor
+        if (NearbyActor2.GetReference() as Actor)
+            nearbyActors[1] = NearbyActor2.GetReference() as Actor
+            if (NearbyActor3.GetReference() as Actor)
+                nearbyActors[2] = NearbyActor3.GetReference() as Actor
+                if (NearbyActor4.GetReference() as Actor)
+                    nearbyActors[3] = NearbyActor4.GetReference() as Actor
+                    if (NearbyActor5.GetReference() as Actor)
+                        nearbyActors[4] = NearbyActor5.GetReference() as Actor
+                    endIf
+                endIf
+            endIf
+        endIf
+    endIf
+    
+    MantellaNearbyActors.stop()
+    
+    return nearbyActors
+EndFunction
+
 event OnUpdate()
     if repository.eventTestRun != 0 ; Set from the console by the in-game test's batch file
         repository.eventTestRun = 0
@@ -114,6 +148,10 @@ event OnUpdate()
     if repository.talkTestRun != 0 ; Set from the console by the in-game test of the talk settings
         repository.talkTestRun = 0
         SendModEvent("Mantella_TalkTest")
+    endIf
+    if repository.actionTestRun != 0 ; Set from the console by the in-game test of the NPC actions
+        repository.actionTestRun = 0
+        SendModEvent("Mantella_ActionTest")
     endIf
     float now = Utility.GetCurrentRealTime()
     if conversation.IsRunning()
@@ -186,13 +224,11 @@ Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemRefere
         if itemName == "gold" ; only count the number of items if it is gold
             itemCount = aiItemCount+" "
         endIf
-        string itemPickedUpMessage = getPlayerName() + " picked up / took " + itemCount + itemName 
-
-        string sourceName = akSourceContainer.getbaseobject().getname()
-        if sourceName != ""
-            itemPickedUpMessage = getPlayerName() + " picked up / took " + itemCount + itemName + " from " + sourceName 
-        endIf
-        
+        string sourceName = ""
+        if akSourceContainer != None ; if the source container is a container, not an actor
+            sourceName = " from " + akSourceContainer.getdisplayname()
+        endif
+        string itemPickedUpMessage = getPlayerName() + " picked up / took " + itemCount + itemName + sourceName
         if itemName != "Iron Arrow" ; Papyrus hallucinates iron arrows
             ;Debug.MessageBox(itemPickedUpMessage)
             AddIngameEventToConversation(itemPickedUpMessage)
@@ -206,15 +242,13 @@ Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemRefe
         string itemName = akBaseItem.GetName()
         string itemCount = ""
         if itemName == "gold" ; only count the number of items if it is gold
-            itemCount = aiItemCount+" "
+            itemCount = aiItemCount + " "
         endIf
-        string itemDroppedMessage = getPlayerName() + " dropped " + itemCount + itemName 
-
-        string destName = akDestContainer.getbaseobject().getname()
-        if destName != ""
-            itemDroppedMessage = getPlayerName() + " placed/gave " + itemCount + itemName + " in/on/to " + destName 
-        endIf
-        
+        string destName = ""
+        if akDestContainer != None
+            destName = " in/on/to " + akDestContainer.getdisplayname()
+        endif
+        string itemDroppedMessage = getPlayerName() + " dropped/gave " + itemCount + itemName + destName
         if itemName != "Iron Arrow" ; Papyrus hallucinates iron arrows
             ;Debug.MessageBox(itemDroppedMessage)
             AddIngameEventToConversation(itemDroppedMessage)
@@ -228,8 +262,8 @@ Event OnSpellCast(Form akSpell)
         string spellCast = (akSpell as form).getname()
         if spellCast 
             if (spellCast != "Mantella") && (spellCast != "Mantella Remove NPC") && (spellCast != "Mantella End Conversation")
-                ;Debug.Notification("The player casted the spell "+ spellCast)
-                AddIngameEventToConversation(getPlayerName() + " casted the spell / consumed " + spellCast , true)
+                ;Debug.Notification("The player cast the spell "+ spellCast)
+                AddIngameEventToConversation(getPlayerName() + " cast the spell / consumed " + spellCast , true)
             endIf
         endIf
     endif
@@ -621,6 +655,7 @@ EndFunction
 float _lastEventCheckTime = 0.0
 float _eventSentTime = 0.0
 bool _eventPending = false
+string _lastNpcEventOutcome = "" ; What came of the last check: "" while it waits for MantellaSoftware's answer. For the in-game tests
 float eventPendingTimeout = 90.0 ; Seconds. The event generator writes a whole scene, so it can take longer than an NPC Initiative check
 Actor[] _eventCandidates ; Everyone nearby named in the last check, nearest first. The scene's participants are among them
 int _eventCandidateCount = 0
@@ -652,6 +687,10 @@ EndEvent
 
 Event OnTalkTest(string eventName, string strArg, float numArg, Form sender)
     MantellaTalkTest.Run(repository, conversation, self)
+EndEvent
+
+Event OnActionTest(string eventName, string strArg, float numArg, Form sender)
+    MantellaActionTest.Run(repository, conversation, self)
 EndEvent
 
 ; Returns true if a check was sent to the server
@@ -687,6 +726,7 @@ string Function RunNpcEventCheck(bool isManual)
         return "too soon after the last check"
     endIf
     _lastEventCheckTime = now
+    _lastNpcEventOutcome = ""
 
     FindNpcEventCandidates()
     if _eventCandidateCount < 2
@@ -882,6 +922,7 @@ Function OnNpcEventResult(int handle)
     int eventId = SKSE_HTTP.getInt(handle, consts.KEY_NPCEVENT_ID, 0)
     int[] refids = SKSE_HTTP.getIntArray(handle, consts.KEY_NPCEVENT_PARTICIPANT_REFIDS)
     if eventId == 0 || refids.Length < 2
+        NoteNpcEventOutcome("nothing happens")
         if repository.showNpcEventMessages
             Debug.Notification("NPC Event: nothing happens")
         endIf
@@ -894,6 +935,13 @@ Function OnNpcEventResult(int handle)
     while i < refids.Length
         Actor npc = FindNpcEventCandidate(refids[i])
         if !npc || !IsAvailableNpc(npc) || !CanNpcEventStart()
+            if !npc
+                NoteNpcEventOutcome("can no longer start: someone in it isn't among the people nearby")
+            elseIf !IsAvailableNpc(npc)
+                NoteNpcEventOutcome("can no longer start: " + npc.GetDisplayName() + " is " + MantellaActorChecks.UnavailableReason(npc))
+            else
+                NoteNpcEventOutcome("can no longer start: " + WhyNpcEventCantStart())
+            endIf
             if repository.showNpcEventMessages
                 Debug.Notification("NPC Event: can no longer start")
             endIf
@@ -903,6 +951,7 @@ Function OnNpcEventResult(int handle)
         names += npc.GetDisplayName() + " "
         i += 1
     endWhile
+    NoteNpcEventOutcome("starts: " + names)
     if repository.showNpcEventMessages
         Debug.Notification("NPC Event starts: " + names)
     endIf
@@ -920,6 +969,24 @@ Function OnNpcEventResult(int handle)
         ; Waits until the box is closed: nobody speaks before. The game is paused meanwhile
         conversation.ShowEventText("npc", text)
     endIf
+EndFunction
+
+; Kept for the in-game tests, and written to the Papyrus log, so a scene that doesn't start says why
+Function NoteNpcEventOutcome(string outcome)
+    _lastNpcEventOutcome = outcome
+    Debug.Trace("Mantella NPC Event: " + outcome)
+EndFunction
+
+; Whether MantellaSoftware has answered the last check
+bool Function IsNpcEventCheckAnswered()
+    return _lastNpcEventOutcome != ""
+EndFunction
+
+string Function LastNpcEventOutcome()
+    if _lastNpcEventOutcome == ""
+        return "no answer from MantellaSoftware"
+    endIf
+    return _lastNpcEventOutcome
 EndFunction
 
 ; The server picked the player watching the scene, who joins before anyone speaks again. People nearby join by Shout instead

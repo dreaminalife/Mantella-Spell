@@ -16,6 +16,7 @@ Actor Property PlayerRef Auto
 VoiceType Property MantellaVoice00  Auto  
 MantellaInterface property EventInterface Auto
 ReferenceAlias Property Narrator Auto
+MantellaListenerScript Property Listener Auto
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;           Globals           ;
@@ -42,6 +43,9 @@ int _lastTopicInfo = 0
 float httpReceivedTime = 0.0
 string lineToSpeakError = "Error: No line transmitted for actor to speak"
 bool microphoneEnabledLastKnownStatus = false
+Actor[] _cachedNearbyActors ; The people near the player at the last context, for actions aimed at someone not in the conversation
+bool _waitingForActionResponse = true
+int _actionResponseTimeout = 0
 bool _npcInitiative = false
 int _npcEventId = 0 ; The NPC Event the conversation acts out. 0 for any other conversation
 bool _npcEventPlayerNoticeable = false
@@ -118,6 +122,7 @@ Function RegisterForConversationEvents()
     RegisterForModEvent(EventInterface.EVENT_ACTIONS_PREFIX + mConsts.ACTION_ENDCONVERSATION,"OnEndConversationActionReceived")
     RegisterForModEvent(EventInterface.EVENT_ACTIONS_PREFIX + mConsts.ACTION_REMOVECHARACTER,"OnRemoveCharacterActionReceived")
     RegisterForModEvent(EventInterface.EVENT_ADD_EVENT,"OnAddEventReceived")
+    RegisterForModEvent(EventInterface.EVENT_ACTION_RESPONSE_COMPLETED,"OnActionResponseCompleted")
     RegisterForModEvent(ROOM_SCAN_EVENT(),"OnRoomScan")
     RegisterForModEvent(EVENT_BUILD_EVENT(),"OnEventBuild")
     RegisterForModEvent(EVENT_SCAN_EVENT(),"OnEventScan")
@@ -441,8 +446,12 @@ function ContinueConversation(string nextAction, int handle)
         sendRequestForPlayerInput(transcribe, updateContext=True)
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_NPCACTION)
         int npcActionHandle = SKSE_HTTP.getNestedDictionary(handle, mConsts.KEY_REPLYTYPE_NPCACTION)
-        ProcessNpcSpeak(npcActionHandle)
-        RequestContinueConversation()
+        bool updateInGameEvents = SKSE_HTTP.getBool(npcActionHandle, mConsts.ACTION_REQUIRES_RESPONSE, false)
+        if updateInGameEvents
+            _waitingForActionResponse = true ; Before the actions go out: their answer can come back before RequestContinueConversation waits
+        endIf
+        ProcessNpcAction(npcActionHandle)
+        RequestContinueConversation(updateInGameEvents=updateInGameEvents)
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_SHOUT_ADDACTOR)
         AddShoutActors(SKSE_HTTP.getIntArray(handle, mConsts.KEY_SHOUT_ADDACTOR_REFIDS))
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_ENDCONVERSATION)
@@ -474,14 +483,16 @@ Function GivePlayerTheTurn()
     EndIf
 EndFunction
 
-function RequestContinueConversation()
+function RequestContinueConversation(bool updateInGameEvents = false)
     if(!_hasBeenStopped)    
         int handle = SKSE_HTTP.createDictionary()
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_CONTINUECONVERSATION)
 
-        int nextTopicInfo = GetNextTopicID()
-        SKSE_HTTP.setInt(handle, mConsts.KEY_CONTINUECONVERSATION_TOPICINFOFILE, nextTopicInfo)
-        _lastTopicInfo = nextTopicInfo
+        ; _lastTopicInfo is only updated once a voiceline actually plays (see ProcessNpcSpeak)
+        ; If this request does not result in a voiceline (eg the reply is "playertalk"),
+        ; the same topic ID is re-sent on the next request instead of being skipped,
+        ; keeping the alternation in sync with what was last heard in-game
+        SKSE_HTTP.setInt(handle, mConsts.KEY_CONTINUECONVERSATION_TOPICINFOFILE, GetNextTopicID())
 
         if(_extraRequestActions && _extraRequestActions.Length > 0)
             ;Debug.Notification("_extraRequestActions contains items. Sending them along with continue!")
@@ -489,6 +500,24 @@ function RequestContinueConversation()
             ClearExtraRequestAction()
             ;Debug.Notification("_extraRequestActions got cleared. Remaining items: " + _extraRequestActions.Length)
         endif
+
+        if updateInGameEvents
+            _contextHandle = SKSE_HTTP.createDictionary()
+
+            ; Wait for action to complete with timeout
+            _actionResponseTimeout = 0
+            while _waitingForActionResponse && _actionResponseTimeout < 50
+                Utility.Wait(0.1)
+                _actionResponseTimeout += 1
+            endWhile
+
+            _waitingForActionResponse = true ; Reset for next action
+
+            string[] past_events = deepcopy(_ingameEvents)
+            SKSE_HTTP.setStringArray(_contextHandle, mConsts.KEY_CONTEXT_INGAMEEVENTS, past_events)
+            ClearIngameEvent()
+            SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_CONTEXT, _contextHandle)
+        endIf
 
         if _sendQuestChecksCatchUp
             AddQuestCheckResults(handle)
@@ -575,10 +604,28 @@ function ProcessNpcSpeak(int handle)
             endif
             _lastNpcToSpeak = speaker
             _lastSpeakerName = speakerName
+            ; Track the topic of the last voiceline actually played so that GetNextTopicID()
+            ; always alternates relative to the last audible line
+            ; Playing the same topic twice in a row can cause the engine to replay the
+            ; previous (cached) voiceline instead of the newly written audio file
+            _lastTopicInfo = topicID
         endIf
-        ; Get actions only after the NPC starts speaking to improve response times
-        string[] actions = SKSE_HTTP.getStringArray(handle, mConsts.KEY_ACTOR_ACTIONS)
-        RaiseActionEvent(speaker, actions)
+        ; Get actions only after the NPC starts speaking to improve response times. Not for a speaker who isn't in the conversation:
+        ; RaiseActionEvent would give them to someone else
+        int[] actionsHandles = SKSE_HTTP.getNestedDictionariesArray(handle, mConsts.KEY_ACTOR_ACTIONS)
+        if actionsHandles && actionsHandles.Length > 0
+            RaiseActionEvent(speaker, actionsHandles)
+        endIf
+    endIf
+endFunction
+
+
+function ProcessNpcAction(int handle)
+    int[] actionsHandles = SKSE_HTTP.getNestedDictionariesArray(handle, mConsts.KEY_ACTOR_ACTIONS)
+    if actionsHandles && actionsHandles.Length > 0
+        ; Who acts, when given: the last NPC to speak may be someone else in a group. None falls back in RaiseActionEvent
+        Actor speaker = GetActorInConversation(SKSE_HTTP.getString(handle, mConsts.KEY_ACTOR_SPEAKER, ""))
+        RaiseActionEvent(speaker, actionsHandles)
     endIf
 endFunction
 
@@ -639,6 +686,50 @@ Actor function GetActorInConversation(string actorName)
         i += 1
     EndWhile
     return none
+endFunction
+
+Actor function GetActorByName(string actorName)
+    ; First, search conversation participants
+    Actor currentActor = GetActorInConversation(actorName)
+    if currentActor != None
+        return currentActor
+    endIf
+
+    ; If not in conversation, search the most recent nearby actors cache
+    if _cachedNearbyActors
+        int i = 0
+        While i < _cachedNearbyActors.Length
+            Actor nearbyActor = _cachedNearbyActors[i]
+            if nearbyActor != None
+                ; Match by display name (nearby actors don't have numbered suffixes)
+                if nearbyActor.GetDisplayName() == actorName
+                    return nearbyActor
+                endIf
+            endIf
+            i += 1
+        EndWhile
+    endIf
+
+    ; Not found in conversation or nearby - return None
+    return None
+endFunction
+
+Actor function GetFirstGuardActor()
+    ; Check each NPC in the conversation to see if they are a guard, returning the first result
+    int i = 0
+    While i < Participants.GetSize()
+        Actor currentActor = Participants.GetAt(i) as Actor
+        if currentActor != None && currentActor.IsGuard()
+            return currentActor
+        endIf
+        i += 1
+    EndWhile
+    return None
+endFunction
+
+Actor[] function GetCachedNearbyActors()
+    ; Returns the most recent cached nearby actors (populated by BuildContext)
+    return _cachedNearbyActors
 endFunction
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1823,6 +1914,7 @@ Function CleanupConversation()
     _isTalking = false
     _lastNpcToSpeak = None
     _lastTopicInfo = 0
+    _cachedNearbyActors = _noActors
     _npcEventId = 0
     _hasNpcEventMonitorValues = false
     _sendQuestChecksCatchUp = false
@@ -1874,6 +1966,9 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
         int handle = SKSE_HTTP.createDictionary()
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_PLAYERINPUT)
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE_PLAYERINPUT, playerinput)
+        ; Send the topic to use in case the player's input is voiced
+        ; (without this the server falls back to topic 1, which can break the topic alternation)
+        SKSE_HTTP.setInt(handle, mConsts.KEY_CONTINUECONVERSATION_TOPICINFOFILE, GetNextTopicID())
 
         if repository.targetTrackingAngerState ; only the anger state of the NPCs is updated by UpdateNpcsInConversationArray()
             UpdateNpcsInConversationArray()
@@ -2009,33 +2104,85 @@ endFunction
 ;       Action handler        ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-Function RaiseActionEvent(Actor speaker, string[] actions)
-    if(!actions || actions.Length == 0)
-        return ;dont send out an action event if there are no actions to act upon
+Function RaiseActionEvent(Actor speaker, int[] actionsHandles)
+    ; Processes actions array, automatically detecting legacy vs advanced actions.
+    ;
+    ; Args:
+    ;     speaker: The NPC who spoke (for context)
+    ;     actionsHandles: Array of SKSE_HTTP dictionary handles, one per action
+    ;
+    ; Each action handle contains:
+    ;     - "identifier": Action name (e.g., "mantella_npc_follow")
+    ;     - "arguments" (optional): Dictionary with parameters
+    ;       - If present = advanced action (sends to MantellaConversation_Advanced_Action_ prefix)
+    ;       - If absent = legacy action (sends to MantellaConversation_Action_ prefix)
+    ;
+    ; Fallback Behavior:
+    ;     If LLM forgets to include arguments for a built-in action, it will be routed
+    ;     to the legacy handler, which will execute the action on the speaker only.
+
+    if !actionsHandles || actionsHandles.Length == 0
+        return ; dont send out an action event if there are no actions to act upon
     endIf
-    
+
+    if !(speaker)
+        if _lastNpcToSpeak
+            speaker = _lastNpcToSpeak
+        else
+            speaker = GetActorInConversationByIndex(1)
+        endIf
+    endIf
+
     int i = 0
-    While i < actions.Length
-        string extraAction = actions[i]
-        ;AddIngameEvent("Recieved action " + extraAction + ". Sending out event!")
-        ; if the action is to open the inventory menu, wait for the speaker to finish their voiceline first before the menu forces the game to pause
-        if extraAction == mConsts.ACTION_NPC_INVENTORY
-            Utility.Wait(0.5)
-            WaitForNpcToFinishSpeaking(speaker, _lastNpcToSpeak)
+    While i < actionsHandles.Length
+        int actionHandle = actionsHandles[i]
+
+        ; Extract action identifier
+        string actionIdentifier = SKSE_HTTP.getString(actionHandle, mConsts.ACTION_IDENTIFIER, "")
+
+        if actionIdentifier != ""
+            ; Check for special handling (eg inventory action timing)
+            if actionIdentifier == mConsts.ACTION_NPC_INVENTORY
+                Utility.Wait(0.5)
+                WaitForNpcToFinishSpeaking(speaker, _lastNpcToSpeak)
+            endIf
+
+            if actionIdentifier == mConsts.KEY_REQUESTTYPE_ENDCONVERSATION
+                EndConversation()
+            else
+                int argumentsHandle = SKSE_HTTP.getNestedDictionary(actionHandle, mConsts.ACTION_ARGUMENTS, 0)
+                ; Detect if this is an advanced action (has arguments) or legacy action (no arguments)
+                if argumentsHandle != 0
+                    string eventName = EventInterface.EVENT_ADVANCED_ACTIONS_PREFIX + actionIdentifier
+                    int eventHandle = ModEvent.Create(eventName)
+                    if eventHandle
+                        ModEvent.PushForm(eventHandle, speaker)
+                        ModEvent.PushForm(eventHandle, Self as Quest)  ; For name resolution
+                        ModEvent.PushInt(eventHandle, argumentsHandle)
+                        ModEvent.Send(eventHandle)
+                    else
+                        Debug.Notification("Mantella: ERROR - Failed to create advanced action event handle")
+                    endIf
+                else
+                    ; LEGACY ACTION PATH
+                    string eventName = EventInterface.EVENT_ACTIONS_PREFIX + actionIdentifier
+                    ; Legacy action: no arguments, send with simple signature
+                    ; This handles both:
+                    ;   1. Player-created custom actions built when the old system was in place
+                    ;   2. Built-in actions when LLM forgets arguments (fallback to speaker-only)
+                    int eventHandle = ModEvent.Create(eventName)
+                    if eventHandle
+                        ModEvent.PushForm(eventHandle, speaker)
+                        ModEvent.Send(eventHandle)
+                    endIf
+                endIf
+            endIf
+        else
+            Debug.Trace("Mantella: Warning - Action missing identifier", 1)
         endIf
 
-        if extraAction == mConsts.KEY_REQUESTTYPE_ENDCONVERSATION
-            EndConversation()
-        else
-            int handle = ModEvent.Create(EventInterface.EVENT_ACTIONS_PREFIX + extraAction)
-            if (handle)
-                ModEvent.PushForm(handle, speaker)
-                ModEvent.Send(handle)
-            endIf 
-        endIf
         i += 1
     EndWhile
-    ;AddIngameEvent("All Events sent out!")
 EndFunction
 
 Function AddExtraRequestAction(string extraAction)
@@ -2153,6 +2300,10 @@ EndFunction
 
 event OnAddEventReceived(string text)
     AddIngameEvent(text)
+endEvent
+
+event OnActionResponseCompleted(string actionIdentifier)
+    _waitingForActionResponse = false
 endEvent
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2481,6 +2632,50 @@ int function BuildContext(bool isConversationStart = false)
     SKSE_HTTP.setStringArray(_contextHandle, mConsts.KEY_CONTEXT_INGAMEEVENTS, past_events)
     ClearIngameEvent()
     AddQuestCheckResults(_contextHandle)
+
+    ; Add nearby actors context for action targeting
+    int[] nearbyActorHandles = BuildNearbyActorsContext()
+    if nearbyActorHandles && nearbyActorHandles.Length > 0
+        SKSE_HTTP.setNestedDictionariesArray(_contextHandle, mConsts.KEY_CONTEXT_NEARBYACTORS, nearbyActorHandles)
+    endIf
+endFunction
+
+int[] function BuildNearbyActorsContext()
+    ; Scan for nearby actors (excludes Mantella conversation participants)
+    Actor[] nearbyActors = Listener.ScanNearbyActors()
+    _cachedNearbyActors = nearbyActors
+
+    if !nearbyActors || nearbyActors.Length == 0
+        return Utility.CreateIntArray(0)
+    endIf
+
+    int totalEntries = nearbyActors.Length
+    int[] nearbyActorHandles = Utility.CreateIntArray(totalEntries)
+    int handleIndex = 0
+    float toMeters = 1.0 / 71.0210
+    int i = 0
+    While i < totalEntries
+        Actor nearbyActor = nearbyActors[i]
+        if nearbyActor != None
+            int actorHandle = SKSE_HTTP.createDictionary()
+            SKSE_HTTP.setString(actorHandle, "name", nearbyActor.GetDisplayName())
+            float distanceInMeters = PlayerRef.GetDistance(nearbyActor) * toMeters
+            SKSE_HTTP.setFloat(actorHandle, "distance", distanceInMeters)
+            nearbyActorHandles[handleIndex] = actorHandle
+            handleIndex += 1
+        endIf
+        i += 1
+    EndWhile
+
+    if handleIndex == 0
+        return Utility.CreateIntArray(0)
+    endIf
+
+    if handleIndex != totalEntries
+        nearbyActorHandles = Utility.ResizeIntArray(nearbyActorHandles, handleIndex)
+    endIf
+
+    return nearbyActorHandles
 endFunction
 
 ; Adds the quest tag check plugin's answers, so MantellaSoftware can tell which quests moved on

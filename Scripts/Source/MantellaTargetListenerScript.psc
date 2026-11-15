@@ -89,7 +89,7 @@ Event OnSpellCast(Form akSpell)
     if repository.targetTrackingOnSpellCast 
         String selfName = self.GetActorReference().getdisplayname()
         string spellCast = (akSpell as form).getname()
-        if spellCast 
+        if spellCast && spellCast != "Mantella Placeholder Spell"
             ;Debug.Notification(selfName+" casted the spell "+ spellCast)
             AddIngameEventToConversation(selfName+" casted the spell " + spellCast , true)
         endIf
@@ -159,7 +159,9 @@ Event OnObjectEquipped(Form akBaseObject, ObjectReference akReference)
         String selfName = self.GetActorReference().getdisplayname()
         string itemEquipped = akBaseObject.getname()
         ;Debug.MessageBox(selfName+" equipped " + itemEquipped)
-        AddIngameEventToConversation(selfName+" equipped " + itemEquipped )
+        if itemEquipped != "Mantella Placeholder Spell"
+            AddIngameEventToConversation(selfName+" equipped " + itemEquipped )
+        endif
     endif
 endEvent
 
@@ -169,7 +171,9 @@ Event OnObjectUnequipped(Form akBaseObject, ObjectReference akReference)
         String selfName = self.GetActorReference().getdisplayname()
         string itemUnequipped = akBaseObject.getname()
         ;Debug.MessageBox(selfName+" unequipped " + itemUnequipped)
-        AddIngameEventToConversation(selfName+" unequipped " + itemUnequipped )
+        if itemUnequipped != "Mantella Placeholder Spell"
+            AddIngameEventToConversation(selfName+" unequipped " + itemUnequipped )
+        endif
     endif
 endEvent
 

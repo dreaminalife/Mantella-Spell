@@ -1,0 +1,28 @@
+FormKey: 204E4A:Mantella.esp
+EditorID: MantellaAdvancedAction_StandDown
+VirtualMachineAdapter:
+  Scripts:
+  - Name: MantellaAdvancedAction_StandDown
+    Properties:
+    - MutagenObjectType: ScriptObjectProperty
+      Name: DGIntimidateQuest
+      Object: 047AE6:Skyrim.esm
+    - MutagenObjectType: ScriptObjectProperty
+      Name: EventInterface
+      Object: 03D41A:Mantella.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: MantellaFunctionSourceFaction
+      Object: 223451:Mantella.esp
+    - MutagenObjectType: ScriptObjectProperty
+      Name: mConsts
+      Object: 03D41A:Mantella.esp
+  Versioning:
+  - Break0
+  ExtraBindDataVersion: 0
+  FileName: ''
+Flags:
+- StartGameEnabled
+- 0x10
+- RunOnce
+Priority: 100
+NextAliasID: 0

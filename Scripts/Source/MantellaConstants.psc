@@ -141,6 +141,7 @@ string property KEY_CONTEXT_NEARBYACTORS = "mantella_nearby_actors" auto
 string property KEY_REQUESTTYPE_TTS = "mantella_tts" auto
 string property KEY_INPUT_NAMESINCONVERSATION = "mantella_names_in_conversation" auto
 string property KEY_TRANSCRIBE = "mantella_transcribe" auto
+string property KEY_PLAYERINPUT_DETAILSFOLLOW = "mantella_player_input_details_follow" auto ; Microphone: the game details come after the player speaks
 string property KEY_INPUTTYPE_TEXT = "mantella_text_input" auto
 string property KEY_INPUTTYPE_MIC = "mantella_mic_input" auto
 string property KEY_INPUTTYPE_PTT = "mantella_push_to_talk" auto

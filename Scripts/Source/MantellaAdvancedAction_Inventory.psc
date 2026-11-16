@@ -13,6 +13,7 @@ EndEvent
 event OnNpcInventoryAdvancedActionReceived(Form speaker, Form conversationQuest, int argumentsHandle)
     if !PlayerRef.IsInFaction(repository.fac_AllowInventory) ; Allow Inventory, in the MCM's NPC Actions. Off by default
         Debug.Notification("Inventory action not enabled in the Mantella MCM.")
+        EventInterface.MarkActionResponseCompleted(mConsts.ACTION_NPC_INVENTORY) ; Nothing to wait for
         return
     endIf
     MantellaConversation conversation = conversationQuest as MantellaConversation
@@ -23,6 +24,8 @@ event OnNpcInventoryAdvancedActionReceived(Form speaker, Form conversationQuest,
     Actor sourceActor = conversation.GetActorByName(sourceName)
 
     NpcInventory(sourceActor)
+    ; Inventory answers back: the game waits for this before it asks Mantella to go on (up to 5 seconds otherwise)
+    EventInterface.MarkActionResponseCompleted(mConsts.ACTION_NPC_INVENTORY)
 endEvent
 
 

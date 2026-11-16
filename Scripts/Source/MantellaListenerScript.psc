@@ -149,9 +149,10 @@ event OnUpdate()
         repository.talkTestRun = 0
         SendModEvent("Mantella_TalkTest")
     endIf
-    if repository.actionTestRun != 0 ; Set from the console by the in-game test of the NPC actions
+    if repository.actionTestRun != 0 ; Set from the console by the in-game test of the NPC actions: 1, or 2 with Advanced Actions on
+        float testRun = repository.actionTestRun as float
         repository.actionTestRun = 0
-        SendModEvent("Mantella_ActionTest")
+        SendModEvent("Mantella_ActionTest", "", testRun)
     endIf
     float now = Utility.GetCurrentRealTime()
     if conversation.IsRunning()
@@ -690,7 +691,11 @@ Event OnTalkTest(string eventName, string strArg, float numArg, Form sender)
 EndEvent
 
 Event OnActionTest(string eventName, string strArg, float numArg, Form sender)
-    MantellaActionTest.Run(repository, conversation, self)
+    if numArg == 2.0
+        MantellaActionTest.RunAdvanced(repository, conversation, self)
+    else
+        MantellaActionTest.Run(repository, conversation, self)
+    endIf
 EndEvent
 
 ; Returns true if a check was sent to the server

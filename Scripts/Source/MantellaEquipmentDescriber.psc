@@ -100,48 +100,59 @@ bool[] Function GetTargetSlotTrackingOptions(MantellaRepository repository)
 EndFunction
 
 
+; The spells the NPC can cast, for CastSpell. Up to 20, the spells added to this NPC first (AddSpell), then those of their kind. Left out:
+; abilities, which are always on and can't be cast (other mods give NPCs many, mostly without a name), and hidden spells mods cast by
+; script. Otherwise they take the places of the real spells, and the NPC is told it knows spells it can't cast
 string[] Function GetSpellListFromActor(actor currentActor)
-    int i = 0
-    int spellIndex = 0
     int spellCap = 20
+    string[] spellNames = Utility.CreateStringArray(spellCap) ; Places left empty are skipped by Mantella
+    int spellIndex = 0
 
+    int i = 0
     int actorSpellCount = currentActor.GetSpellCount()
-
-    ActorBase currentActorBase = currentActor.GetActorBase()
-    int actorBaseSpellCount = currentActorBase.GetSpellCount()
-
-    int totalSpellCount = actorSpellCount + actorBaseSpellCount
-
-    if totalSpellCount == 0
-        return Utility.CreateStringArray(0)
-    elseif totalSpellCount > spellCap
-        totalSpellCount = spellCap
-    endif
-
-    string[] spellNames = Utility.CreateStringArray(totalSpellCount)
-
-    ; First, get spells from Actor reference
     while (i < actorSpellCount) && (spellIndex < spellCap)
-        string spellName = currentActor.GetNthSpell(i).getName()
-        if spellName != "MantellaIsTalkingSpell"
-            spellNames[spellIndex] = spellName
-            spellIndex += 1
-        endIf
+        spellIndex = AddCastableSpell(currentActor.GetNthSpell(i), spellNames, spellIndex)
         i += 1
     endwhile
 
-    ; If we haven't already reached the spell cap limit, check ActorBase spells
-    if spellIndex < spellCap
-        int j = 0
-        while (j < actorBaseSpellCount) && (spellIndex < spellCap)
-            string spellName = currentActorBase.GetNthSpell(j).getName()
-            if spellName != "MantellaIsTalkingSpell"
-                spellNames[spellIndex] = spellName
-                spellIndex += 1
-            endIf
-            j += 1
-        endwhile
-    endIf
+    ActorBase currentActorBase = currentActor.GetActorBase()
+    int j = 0
+    int actorBaseSpellCount = currentActorBase.GetSpellCount()
+    while (j < actorBaseSpellCount) && (spellIndex < spellCap)
+        spellIndex = AddCastableSpell(currentActorBase.GetNthSpell(j), spellNames, spellIndex)
+        j += 1
+    endwhile
 
     return spellNames
 Endfunction
+
+; Puts the spell's name in the next free place if it can be cast and isn't listed yet. Returns where the next one goes
+int Function AddCastableSpell(Spell currentSpell, string[] spellNames, int spellIndex)
+    if !CanBeCast(currentSpell)
+        return spellIndex
+    endIf
+    string spellName = currentSpell.GetName()
+    if spellNames.Find(spellName) >= 0
+        return spellIndex
+    endIf
+    spellNames[spellIndex] = spellName
+    return spellIndex + 1
+EndFunction
+
+bool Function CanBeCast(Spell currentSpell)
+    if !currentSpell
+        return false
+    endIf
+    string spellName = currentSpell.GetName()
+    if spellName == "" || spellName == "MantellaIsTalkingSpell"
+        return false
+    endIf
+    MagicEffect mainEffect = currentSpell.GetNthEffectMagicEffect(currentSpell.GetCostliestEffectIndex())
+    if !mainEffect
+        return false
+    endIf
+    if mainEffect.GetCastingType() == 0 ; Constant Effect: an ability
+        return false
+    endIf
+    return !mainEffect.IsEffectFlagSet(0x00008000) ; HideInUI: a spell mods cast by script, never shown to the player
+EndFunction

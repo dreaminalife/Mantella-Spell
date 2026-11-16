@@ -23,7 +23,6 @@ MantellaListenerScript Property Listener Auto
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 String[] _ingameEvents
-String[] _flushedEvents ; The events moved into the last built context, put back if that context is never sent
 String[] _extraRequestActions
 int[] _actorHandles = None
 Form[] _actorHandleActors ; Who each of _actorHandles is for, in the same order
@@ -70,6 +69,7 @@ int _roomScanId = 0 ; Counts the room scans asked for. Cancelling the text box, 
 int _roomScanStartedId = 0 ; The last room scan that began running
 int _roomScanDoneId = 0 ; The last room scan that finished
 Actor[] _roomScanNearby ; What the last finished room scan found
+int _roomMicScanId = 0 ; Saying something to the room with the microphone: the scan finding who is nearby while the player speaks. 0 for none
 Form[] _prebuiltActors ; People nearby whose full actor settings the room scan built while the player typed, or the NPC Event check built
 int[] _prebuiltHandles ; Their actor settings, used by the start instead of building them again
 Actor[] _npcEventNearby ; Who the NPC Event check found nearby, so the start doesn't scan again
@@ -169,6 +169,21 @@ Function SetRoomStart(string line, Actor[] nearby)
     _roomNearby = nearby
 EndFunction
 
+bool _isSayingToRoom = false ; MantellaShout.SayToRoom is getting ready: the text box, or finding who is nearby
+
+; False if a Say to the room is already getting ready. Checked and set in one step, so two presses can't both go ahead
+bool Function BeginSayToRoom()
+    if _isSayingToRoom
+        return false
+    endIf
+    _isSayingToRoom = true
+    return true
+EndFunction
+
+Function EndSayToRoom()
+    _isSayingToRoom = false
+EndFunction
+
 ; The next conversation acts out an NPC Event (see MantellaListenerScript). The id is sent with the start request
 Function SetNpcEvent(int eventId)
     _npcEventId = eventId
@@ -201,10 +216,9 @@ Function SayAsPlayer(string line)
     if !_does_accept_player_input || line == ""
         return
     endIf
-    BuildContext() ; As the text box does before it opens
-    sendRequestForPlayerInput(line, updateContext=False)
-    _does_accept_player_input = False
+    _does_accept_player_input = False ; As the text box does after Enter
     ClearRepeatingMessage()
+    sendRequestForPlayerInput(line, updateContext=True)
 EndFunction
 
 ; How many NPC lines have arrived from MantellaSoftware. Used by the in-game test (MantellaEventTest) to pick an event while one is spoken
@@ -302,6 +316,9 @@ function StartConversation(Actor[] actorsToStartConversationWith)
         _isRoomFirstTurn = true
         _isRoomConversation = true
         ClearPrebuiltActors() ; Built while the player typed. Later requests build them fresh
+        if !roomNearby || roomNearby.Length == 0
+            _roomMicScanId = StartRoomScan() ; Microphone: nobody was looked for yet. Found while the player speaks (UseRoomMicScan)
+        endIf
     elseIf IsNpcEvent()
         ; An NPC Event runs in Shout from the start, so its Game Master can draw in anyone nearby. While the player watches,
         ; MantellaShout finds them with the NPC Event's rules. Sent with the start, so people who join heard the whole scene
@@ -1016,7 +1033,7 @@ EndFunction
 
 ; Finds who is nearby now. Called when Shout is switched on and on every tick of MantellaListenerScript, so requests only attach the last list
 Function RefreshShoutNearby()
-    if !_isShouting
+    if !_isShouting || _roomMicScanId != 0 ; The room scan is already looking
         return
     endIf
     bool byShoutRules = !MantellaShout.IsWatchingNpcEvent(self) ; As FindNearby decides it
@@ -1392,7 +1409,6 @@ Function TrySendPendingEvent()
         return
     endIf
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
-    _flushedEvents = _noStrings
 EndFunction
 
 ; Who the event can be about, nearest first, with the full actor settings of the nearest who are not in the conversation (Most People Described).
@@ -1908,7 +1924,6 @@ Function CleanupConversation()
     ClearParticipants()
     ClearRepeatingMessage()
     _ingameEvents = _noStrings
-    _flushedEvents = _noStrings
     _cooldownEvents = _noStrings ; So a cooldown from this conversation does not hide events in the next one
     _does_accept_player_input = false
     _isTalking = false
@@ -1920,6 +1935,10 @@ Function CleanupConversation()
     _sendQuestChecksCatchUp = false
     _isRoomFirstTurn = false
     _roomLine = ""
+    if _roomMicScanId != 0
+        CancelRoomScan(_roomMicScanId) ; Ended before the player spoke
+        _roomMicScanId = 0
+    endIf
     _isRoomConversation = false
     _isGameMasterMode = false
     _holdForEventText = false ; ShowEventText clears it too. Also here, so a hold left behind can't stop the next conversation from starting
@@ -1979,11 +1998,31 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
             BuildContext()
         endIf
         SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_CONTEXT, _contextHandle)
+        bool usedRoomScan = UseRoomMicScan()
         AddShoutValues(handle)
+        if usedRoomScan
+            ClearPrebuiltActors() ; Built while the player spoke. Later requests build them fresh
+        endIf
 
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
-        _flushedEvents = _noStrings
     EndIf
+endFunction
+
+; Saying something to the room with the microphone: who is nearby, found while the player spoke, goes with their line, so the
+; Game Master can pick someone to answer. Waits if the scan is not done yet. Returns true if it was used
+bool Function UseRoomMicScan()
+    int scanId = _roomMicScanId
+    if scanId == 0
+        return false
+    endIf
+    _roomMicScanId = 0
+    if !FinishRoomScan(scanId)
+        RefreshShoutNearby() ; Replaced by another scan: looked for here instead
+        return false
+    endIf
+    SetShoutNearby(GetRoomScanResult())
+    _isShoutNearbyByShoutRules = true ; Found with the Shout Mode page's rules, as RefreshShoutNearby does
+    return true
 endFunction
 
 function RequestInterrupt()
@@ -2006,6 +2045,9 @@ function RequestInterrupt()
     Debug.Notification("Interrupting...")
 endFunction
 
+; The microphone starts listening right away. Gathering the game details (events, who is nearby, quests) takes a few seconds in a crowded
+; place, so none are sent now: once the player has spoken, MantellaSoftware sends back what was said (KEY_REQUESTTYPE_TTS) and the game
+; sends it again with the details
 function sendRequestForVoiceTranscribe()
     if(!_does_accept_player_input)
         return
@@ -2013,31 +2055,34 @@ function sendRequestForVoiceTranscribe()
         _does_accept_player_input = False
     endif
 
-    sendRequestForPlayerInput("", updateContext=True)
+    if(!_hasBeenStopped)
+        int handle = SKSE_HTTP.createDictionary()
+        SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_PLAYERINPUT)
+        SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE_PLAYERINPUT, "")
+        SKSE_HTTP.setBool(handle, mConsts.KEY_PLAYERINPUT_DETAILSFOLLOW, true)
+        SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+    endIf
     ShowRepeatingMessage("Listening...")
 endFunction
 
+bool _isTextBoxOpen = false ; One text box at a time: presses while it is open are ignored
+
+; The text box opens right away. The game details are gathered after Enter, as they take a few seconds in a crowded place
 function GetPlayerTextInput()
-    if(!_does_accept_player_input)
+    if(!_does_accept_player_input || _isTextBoxOpen)
         return
     endif
-
-    ; Sneak in context refresh before textbox opens
-    ; As of writing, BuildContext() takes ~0.3 seconds to run,
-    ; but if this runtime increases in the future the delay may become noticeable
-    BuildContext()
+    _isTextBoxOpen = true
 
     UIExtensions.InitMenu("UITextEntryMenu")
     UIExtensions.OpenMenu("UITextEntryMenu")
-
     string result = UIExtensions.GetMenuResultString("UITextEntryMenu")
-    if (result && result != "")
-        sendRequestForPlayerInput(result, updateContext=False)
-        _does_accept_player_input = False
+    _isTextBoxOpen = false
+
+    if (result && result != "" && _does_accept_player_input)
+        _does_accept_player_input = False ; Before the details are gathered, so the talk key does nothing meanwhile
         ClearRepeatingMessage()
-    else
-        ; The text box was cancelled, so the context built above is never sent. Keep its events for the next attempt
-        RestoreFlushedEvents()
+        sendRequestForPlayerInput(result, updateContext=True)
     endIf
 endFunction
 
@@ -2281,22 +2326,6 @@ Function ClearIngameEvent()
     _ingameEvents = Utility.CreateStringArray(0)
 EndFunction
 
-; Puts the events of an unsent context back in front of the ones added since
-Function RestoreFlushedEvents()
-    if !_flushedEvents
-        return
-    endIf
-    string[] newerEvents = _ingameEvents
-    _ingameEvents = _flushedEvents
-    _flushedEvents = _noStrings
-    if newerEvents
-        int i = 0
-        While i < newerEvents.Length
-            AddIngameEvent(newerEvents[i])
-            i += 1
-        EndWhile
-    endIf
-EndFunction
 
 event OnAddEventReceived(string text)
     AddIngameEvent(text)
@@ -2628,7 +2657,6 @@ int function BuildContext(bool isConversationStart = false)
     SKSE_HTTP.setInt(_contextHandle, mConsts.KEY_CONTEXT_TIME, _initialTime)
 
     string[] past_events = deepcopy(_ingameEvents)
-    _flushedEvents = past_events
     SKSE_HTTP.setStringArray(_contextHandle, mConsts.KEY_CONTEXT_INGAMEEVENTS, past_events)
     ClearIngameEvent()
     AddQuestCheckResults(_contextHandle)

@@ -94,11 +94,19 @@ EndFunction
 ; Started from the Conversation Wheel (Say) or the talk hotkey. Typed text is asked for first, so cancelling the text box starts nothing.
 ; Finding who is nearby, and building the details of the nearest, takes a few seconds in a crowded place. With the text box it runs
 ; on another thread while the player types (MantellaConversation.StartRoomScan), so the box opens right away and little is left after Enter.
-; Cancelling the box throws the scan away
+; Cancelling the box throws the scan away. Pressing again while one is getting ready does nothing: otherwise a second text box would open
+; after Enter, and its scan would replace the first one, so the first line was lost.
+; With the microphone the conversation starts without scanning, so it listens sooner. The scan runs while the player speaks and goes with
+; their line (MantellaConversation.UseRoomMicScan). With nobody around, the player hears "Nobody answers" after speaking
 Function SayToRoom(MantellaRepository repository, MantellaConversation conversation) global
-    if conversation.IsRunning()
+    if conversation.IsRunning() || !conversation.BeginSayToRoom()
         return
     endIf
+    SayToRoomOnce(repository, conversation)
+    conversation.EndSayToRoom()
+EndFunction
+
+Function SayToRoomOnce(MantellaRepository repository, MantellaConversation conversation) global
     string line = ""
     Actor[] nearby
     if !repository.microphoneEnabled
@@ -114,12 +122,12 @@ Function SayToRoom(MantellaRepository repository, MantellaConversation conversat
             return ; Replaced by a newer Say
         endIf
         nearby = conversation.GetRoomScanResult()
+        if !nearby || nearby.Length == 0
+            Debug.Notification("Nobody is around to hear you")
+            return
+        endIf
     else
-        nearby = FindNearby(repository, conversation)
-    endIf
-    if !nearby || nearby.Length == 0
-        Debug.Notification("Nobody is around to hear you")
-        return
+        Debug.Notification("Getting ready...")
     endIf
     if conversation.IsRunning()
         return ; Something else started a conversation during the scan

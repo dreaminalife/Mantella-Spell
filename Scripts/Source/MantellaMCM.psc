@@ -17,6 +17,7 @@ int property oid_keymapInterruptHotkey auto
 int property oid_keymapNpcInitiativeHotkey auto
 int property oid_keymapNpcEventHotkey auto
 int property oid_keymapWheelHotkey auto
+int property oid_keymapShowHotkey auto
 
 int property oid_showDialogueItems auto
 
@@ -161,7 +162,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 21
+    Return 22
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -175,6 +176,9 @@ Event OnConfigOpen()
         OnConfigInit()
     endIf
     repository.EnsureEventDefaults()
+    if repository.MantellaShowHotkey == 0 ; 0 is no key, but the menu shows it as Esc. A save the version 22 update never reached has it
+        repository.MantellaShowHotkey = -1
+    endIf
     if repository.shoutHearingDistance == 0 ; Never 0 once set: its slider starts at 5
         repository.assignDefaultSettings(14) ; Only assigns the defaults added in version 15 and later
     elseIf repository.shoutMaxListed == 0 ; Never 0 once set: its slider starts at 1
@@ -344,7 +348,9 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_keymapInterruptHotkey
 		SetInfoText("Stops the NPCs mid-response and gives you the turn. Then reply with the Open Text Prompt hotkey or the mic.")
 	elseIf optionID == oid_keymapWheelHotkey
-		SetInfoText("Opens a wheel with the options that make sense right now: talk to your companions or the person you're looking at, interrupt, start an NPC Event, make something happen in the conversation (Events page), end the conversation. Companions are your followers plus anyone you add from the wheel.")
+		SetInfoText("Opens a wheel with the options that make sense right now: talk to your companions or the person you're looking at, interrupt, start an NPC Event, make something happen in the conversation (Events page), show them what you see. Companions are your followers plus anyone you add from the wheel. To end a conversation, use the End Conversation hotkey, say goodbye or walk away.")
+	elseIf optionID == oid_keymapShowHotkey
+		SetInfoText("In a conversation, shows the NPCs what you see right now: they get a picture of the game with the next thing you say. Works with Vision off, but needs a model that can read pictures. Same as Show on the Conversation Wheel.")
 
     elseIf optionID == oid_showDialogueItems	
 		SetInfoText("Show the dialogue tree entries to start a conversation or add and remove NPCs from it.")

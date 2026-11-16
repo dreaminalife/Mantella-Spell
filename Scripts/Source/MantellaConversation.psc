@@ -401,6 +401,13 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
     ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to determine reply type", 2)
     IF replyType == mConsts.KEY_REPLYTTYPE_INITCOMPLETED || replyType == mConsts.KEY_REPLYTYPE_INTERRUPTRECEIVED
         None
+    ElseIf replyType == mConsts.KEY_REPLYTYPE_SHOWRECEIVED
+        ; Shown once the picture is taken, so the note isn't in it
+        If SKSE_HTTP.getBool(typedDictionaryHandle, mConsts.KEY_SHOW_TAKEN, false)
+            Debug.Notification("You show them what you see")
+        ElseIf IsRunning()
+            Debug.Notification("Mantella couldn't take a picture of the game")
+        EndIf
     ElseIf (replyType != "error")
         ContinueConversation(replyType, typedDictionaryHandle)        
     Else
@@ -2043,6 +2050,17 @@ function RequestInterrupt()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_INTERRUPT)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
     Debug.Notification("Interrupting...")
+endFunction
+
+; Show (hotkey or wheel): MantellaSoftware takes a picture of the game window right away, and sends it with the player's next line.
+; Only in a conversation the player is in. Sent while another request may still be running, like an interruption
+function RequestShow()
+    if !IsRunning() || _hasBeenStopped || !IsPlayerInConversation()
+        return
+    endIf
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_SHOW)
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
 endFunction
 
 ; The microphone starts listening right away. Gathering the game details (events, who is nearby, quests) takes a few seconds in a crowded

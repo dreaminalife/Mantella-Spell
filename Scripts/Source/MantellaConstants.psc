@@ -42,6 +42,10 @@ string property KEY_REPLYTYPE_PLAYERTALK = "mantella_player_talk" auto
 string property KEY_REPLYTYPE_NPCACTION = "mantella_npc_action" auto
 string property KEY_REPLYTYPE_ENDCONVERSATION = "mantella_end_conversation" auto
 string property KEY_REPLYTYPE_INTERRUPTRECEIVED = "mantella_interrupt_received" auto
+; Show: the NPCs get a picture of what the player sees now, with the player's next line. Handled right away, like an interruption
+string property KEY_REQUESTTYPE_SHOW = "mantella_show" auto
+string property KEY_REPLYTYPE_SHOWRECEIVED = "mantella_show_received" auto
+string property KEY_SHOW_TAKEN = "mantella_show_taken" auto ; False if the picture couldn't be taken
 
 string property KEY_REQUESTTYPE_NPCINITIATIVE = "mantella_npc_initiative_check" auto
 string property KEY_REPLYTYPE_NPCINITIATIVE = "mantella_npc_initiative_result" auto

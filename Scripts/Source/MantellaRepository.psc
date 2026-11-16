@@ -34,6 +34,7 @@ int property MantellaInterruptHotkey auto
 int property MantellaNpcInitiativeHotkey auto
 int property MantellaNpcEventHotkey auto
 int property MantellaWheelHotkey auto
+int property MantellaShowHotkey auto ; Show: the NPCs get a picture of what the player sees now
 
 bool property showDialogueItems auto Conditional
 
@@ -188,6 +189,9 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 22 || isFirstInit)
+        MantellaShowHotkey = -1
+    EndIf
     ; Version 21 added Show What Happened (npcEventHideText and the others). Stored the other way round, so it needs no default here
     If (lastVersion < 20 || isFirstInit)
         if !eventFollowerDefaultsAssigned ; Once only, so a later choice is kept even when an older block runs again (see MantellaMCM.OnConfigOpen)
@@ -447,6 +451,12 @@ function BindNpcEventHotkey(int keyCode)
     RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
 endfunction
 
+function BindShowHotkey(int keyCode)
+    UnregisterForKey(MantellaShowHotkey)
+    MantellaShowHotkey=keyCode
+    RegisterHotkeys() ; Also brings back a key another hotkey shares. An unmapped key (-1) isn't registered
+endFunction
+
 function BindWheelHotkey(int keyCode)
     ;used by the MCM_GeneralSettings when updating the Conversation Wheel hotkey KeyMapChange
     UnregisterForKey(MantellaWheelHotkey)
@@ -466,6 +476,7 @@ function RegisterHotkeys()
     RegisterHotkey(MantellaNpcInitiativeHotkey)
     RegisterHotkey(MantellaNpcEventHotkey)
     RegisterHotkey(MantellaWheelHotkey)
+    RegisterHotkey(MantellaShowHotkey)
 endfunction
 
 function RegisterHotkey(int keyCode)
@@ -543,7 +554,7 @@ Function WheelFinished()
 EndFunction
 
 bool Function IsMantellaHotkey(int keyCode)
-    return keyCode == MantellaStartHotkey || keyCode == MantellaListenerTextHotkey || keyCode == MantellaEndHotkey || keyCode == MantellaCustomGameEventHotkey || keyCode == MantellaRadiantHotkey || keyCode == MantellaInterruptHotkey || keyCode == MantellaNpcInitiativeHotkey || keyCode == MantellaNpcEventHotkey || keyCode == MantellaWheelHotkey
+    return keyCode == MantellaStartHotkey || keyCode == MantellaListenerTextHotkey || keyCode == MantellaEndHotkey || keyCode == MantellaCustomGameEventHotkey || keyCode == MantellaRadiantHotkey || keyCode == MantellaInterruptHotkey || keyCode == MantellaNpcInitiativeHotkey || keyCode == MantellaNpcEventHotkey || keyCode == MantellaWheelHotkey || keyCode == MantellaShowHotkey
 EndFunction
 
 ; The hotkey may have been let go before the wheel was on screen, when OnKeyUp could not close it yet
@@ -703,6 +714,9 @@ Event OnKeyDown(int KeyCode)
             SendModEvent("Mantella_NpcEventHotkey") ; The check lives in MantellaListenerScript
         elseIf KeyCode == MantellaWheelHotkey
             OpenWheel()
+        elseIf KeyCode == MantellaShowHotkey
+            MantellaConversation conversation = Quest.GetQuest("MantellaConversation") as MantellaConversation
+            conversation.RequestShow()
         elseIf KeyCode == MantellaRadiantHotkey
             radiantEnabled =! radiantEnabled
             if radiantEnabled == True

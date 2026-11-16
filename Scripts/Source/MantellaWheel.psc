@@ -27,7 +27,7 @@ EndFunction
 int Function ACTION_ADD_COMPANIONS() global
     return 8
 EndFunction
-int Function ACTION_END() global
+int Function ACTION_SHOW() global ; Show: the NPCs get a picture of what the player sees now, with the player's next line. See MantellaConversation.RequestShow
     return 9
 EndFunction
 int Function ACTION_SHOUT() global ; Anyone nearby can answer or join in. See MantellaShout
@@ -107,14 +107,15 @@ Function Open(MantellaRepository repository) global
         count = AddOption(wheel, actions, count, "NPC Event", "NPCs nearby act a scene", ACTION_START_NPC_EVENT())
         count = AddOption(wheel, actions, count, "Approach", "Someone comes over", ACTION_NPC_INITIATIVE())
     else
+        ; No End: the End Conversation hotkey, saying goodbye or walking away end a conversation
         if isPlayerIn
             count = AddOption(wheel, actions, count, "Interrupt", "Stop the NPCs", ACTION_INTERRUPT())
+            count = AddOption(wheel, actions, count, "Show", "Show them what you see", ACTION_SHOW())
         elseIf conversation.IsNpcEvent()
             count = AddOption(wheel, actions, count, "Step in", "Step into the scene", ACTION_INTERRUPT())
         else
             count = AddOption(wheel, actions, count, "Join", "Join them", ACTION_JOIN())
         endIf
-        count = AddOption(wheel, actions, count, "End", "Stop talking", ACTION_END())
         if target
             if conversation.Participants.HasForm(target)
                 count = AddOption(wheel, actions, count, "Remove", "Send " + name + " away", ACTION_REMOVE_TARGET())
@@ -193,8 +194,15 @@ Function RunAction(int actionId, MantellaRepository repository, MantellaConversa
         endIf
     elseIf actionId == ACTION_ADD_COMPANIONS()
         AddCompanions(repository, conversation)
-    elseIf actionId == ACTION_END()
-        repository.MantellaEndSpell.Cast(player)
+    elseIf actionId == ACTION_SHOW()
+        ; The picture is of the game window: the wheel must be gone from the screen first
+        int waited = 0
+        while UI.IsMenuOpen("CustomMenu") && waited < 20
+            Utility.WaitMenuMode(0.05)
+            waited += 1
+        endWhile
+        Utility.Wait(0.25) ; The wheel fades out
+        conversation.RequestShow()
     elseIf actionId == ACTION_SHOUT()
         if conversation.IsRunning() && conversation.IsPlayerInConversation()
             conversation.SetShout(true)

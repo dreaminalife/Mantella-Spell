@@ -22,6 +22,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_keymapRadiantHotkey = mcm.AddKeyMapOption("Toggle Radiant Dialogue", repository.MantellaRadiantHotkey, mcm.OPTION_FLAG_WITH_UNMAP) 
     mcm.oid_keymapInterruptHotkey = mcm.AddKeyMapOption("Interrupt NPCs", repository.MantellaInterruptHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
     mcm.oid_keymapWheelHotkey = mcm.AddKeyMapOption("Open Conversation Wheel", repository.MantellaWheelHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
+    mcm.oid_keymapShowHotkey = mcm.AddKeyMapOption("Show Them What You See", repository.MantellaShowHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
 endfunction
 
 function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
@@ -81,7 +82,7 @@ endfunction
 
 function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictControl, String conflictName, MantellaRepository Repository) global
     ;This script is used to check if a key is already used, if it's not it will update to a new value (stored in MantellaRepository) or it will prompt the user to warn him of the conflict. The actual keybind happens in MantellaRepository
-    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapRadiantHotkey || option == mcm.oid_keymapInterruptHotkey || option == mcm.oid_keymapNpcInitiativeHotkey || option == mcm.oid_keymapNpcEventHotkey || option == mcm.oid_keymapWheelHotkey
+    bool isOptionHotkey = option == mcm.oid_keymapStartAddHotkey || option == mcm.oid_keymapPromptHotkey || option == mcm.oid_keymapCustomGameEventHotkey || option == mcm.oid_keymapEndHotkey || option == mcm.oid_keymapRadiantHotkey || option == mcm.oid_keymapInterruptHotkey || option == mcm.oid_keymapNpcInitiativeHotkey || option == mcm.oid_keymapNpcEventHotkey || option == mcm.oid_keymapWheelHotkey || option == mcm.oid_keymapShowHotkey
     if (isOptionHotkey)
         Bool continue = true
         ;below checks if there's already a bound key
@@ -115,6 +116,8 @@ function KeyMapChange(MantellaMCM mcm,Int option, Int keyCode, String conflictCo
                 repository.BindNpcEventHotkey(keyCode)
             elseIf option == mcm.oid_keymapWheelHotkey
                 repository.BindWheelHotkey(keyCode)
+            elseIf option == mcm.oid_keymapShowHotkey
+                repository.BindShowHotkey(keyCode)
             endif
         endIf
     endIf

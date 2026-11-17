@@ -499,6 +499,10 @@ bool Function IsQuestChecksInstalled()
     return SKSE.GetPluginVersion("MantellaQuestChecks") >= 0
 EndFunction
 
+bool Function IsVoiceClipsInstalled()
+    return SKSE.GetPluginVersion("MantellaVoiceClips") >= 0
+EndFunction
+
 ; Hands a check list from MantellaSoftware (a nested dictionary of the reply) to the quest tag check plugin
 bool Function SetQuestCheckList(int listHandle, MantellaConstants consts)
     if !listHandle || !IsQuestChecksInstalled()

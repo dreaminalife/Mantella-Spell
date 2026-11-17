@@ -98,6 +98,13 @@ string property KEY_QUESTCHECKS_REFERENCES = "mantella_quest_check_references" a
 string property KEY_QUESTCHECKS_PARAMS1 = "mantella_quest_check_params1" auto
 string property KEY_QUESTCHECKS_PARAMS2 = "mantella_quest_check_params2" auto
 string property KEY_QUESTCHECKS_VERSION = "mantella_quest_check_version" auto
+
+; Voice clips: the MantellaVoiceClips plugin copies voice lines from the game for MantellaSoftware's voice services
+string property KEY_VOICECLIP_REQUESTS = "mantella_voice_clip_requests" auto ; On any reply: JSON texts, each handed to MantellaVoiceClips.FetchClips
+string property KEY_REQUESTTYPE_VOICECLIP_DELIVERED = "mantella_voice_clip_delivered" auto ; Sent when the plugin has copied a request's lines
+string property KEY_VOICECLIP_REQUESTID = "mantella_voice_clip_request_id" auto
+string property KEY_VOICE_NOTICES = "mantella_voice_notices" auto ; On any reply: short notices about the voice service, shown once
+string property KEY_REQUESTTYPE_VOICECLIP_SAVELOADED = "mantella_voice_clip_save_loaded" auto ; Sent once when a save loads: its reply carries voice clip work waiting
 string property KEY_QUESTCHECKS_RESULTS = "mantella_quest_check_results" auto
 
 string property KEY_STARTCONVERSATION_WORLDID = "mantella_worldid" auto
@@ -114,6 +121,8 @@ string property KEY_ACTOR_RACE = "mantella_actor_race" auto
 string property KEY_ACTOR_ISPLAYER = "mantella_actor_is_player" auto
 string property KEY_ACTOR_RELATIONSHIPRANK = "mantella_actor_relationshiprank" auto
 string property KEY_ACTOR_VOICETYPE = "mantella_actor_voicetype" auto
+string property KEY_ACTOR_PLUGIN = "mantella_actor_plugin" auto ; The plugin the NPC comes from and their form ID in it, for a voice clip of their own
+string property KEY_ACTOR_LOCALID = "mantella_actor_localid" auto
 string property KEY_ACTOR_ISINCOMBAT = "mantella_actor_is_in_combat" auto
 string property KEY_ACTOR_ISENEMY = "mantella_actor_is_enemy" auto
 string property KEY_ACTOR_CUSTOMVALUES = "mantella_actor_custom_values" auto

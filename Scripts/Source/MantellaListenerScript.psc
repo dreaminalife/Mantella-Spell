@@ -75,7 +75,9 @@ Event OnPlayerLoadGame()
     ; EndIf
     repository.RegisterHotkeys()
     RegisterForModEvent("SKSE_HTTP_OnHttpReplyReceived", "OnHttpReplyReceived")
+    RegisterForModEvent("Mantella_VoiceClipsDone", "OnVoiceClipsDone")
     RequestQuestCheckList()
+    SendVoiceClipsSaveLoaded()
     RegisterForModEvent("Mantella_NpcInitiativeHotkey", "OnNpcInitiativeHotkey")
     RegisterForModEvent("Mantella_NpcEventHotkey", "OnNpcEventHotkey")
     RegisterForModEvent("Mantella_EventTest", "OnEventTest")
@@ -108,6 +110,48 @@ Function RequestQuestCheckList()
     SKSE_HTTP.setString(handle, consts.KEY_REQUESTTYPE, consts.KEY_REQUESTTYPE_QUESTCHECKLIST)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
 EndFunction
+
+; MantellaSoftware can't call the game: voice clip work waiting there (Prepare all voices on its Text-to-Speech page) comes with its
+; next reply. Sent once when a save loads, so that work doesn't wait for the first conversation. Never on a timer
+Function SendVoiceClipsSaveLoaded()
+    if !repository.IsVoiceClipsInstalled()
+        return
+    endIf
+    MantellaConstants consts = conversation.mConsts
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, consts.KEY_REQUESTTYPE, consts.KEY_REQUESTTYPE_VOICECLIP_SAVELOADED)
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
+EndFunction
+
+; Any reply can carry requests for voice clips, which the MantellaVoiceClips plugin copies from the game files in the background,
+; and short notices about the voice service
+Function HandleVoiceReplyParts(int handle, MantellaConstants consts)
+    if SKSE_HTTP.hasKey(handle, consts.KEY_VOICECLIP_REQUESTS) && repository.IsVoiceClipsInstalled()
+        string[] requests = SKSE_HTTP.getStringArray(handle, consts.KEY_VOICECLIP_REQUESTS)
+        int i = 0
+        while i < requests.Length
+            MantellaVoiceClips.FetchClips(requests[i])
+            i += 1
+        endWhile
+    endIf
+    if SKSE_HTTP.hasKey(handle, consts.KEY_VOICE_NOTICES)
+        string[] notices = SKSE_HTTP.getStringArray(handle, consts.KEY_VOICE_NOTICES)
+        int i = 0
+        while i < notices.Length
+            Debug.Notification(notices[i])
+            i += 1
+        endWhile
+    endIf
+EndFunction
+
+; The plugin copied a request's lines: MantellaSoftware takes them in
+Event OnVoiceClipsDone(string eventName, string requestId, float clipCount, Form sender)
+    MantellaConstants consts = conversation.mConsts
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, consts.KEY_REQUESTTYPE, consts.KEY_REQUESTTYPE_VOICECLIP_DELIVERED)
+    SKSE_HTTP.setString(handle, consts.KEY_VOICECLIP_REQUESTID, requestId)
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
+EndEvent
 
 ; NPC Initiative, NPC Events and radiant conversations share the one conversation slot. Each has its own frequency, checked on a short tick.
 ; Only one of them starts per tick, and nothing starts while a check waits for the server
@@ -1042,6 +1086,7 @@ EndFunction
 
 event OnHttpReplyReceived(int typedDictionaryHandle)
     MantellaConstants consts = conversation.mConsts
+    HandleVoiceReplyParts(typedDictionaryHandle, consts)
     string replyType = SKSE_HTTP.getString(typedDictionaryHandle, consts.KEY_REPLYTYPE, "")
     if replyType == consts.KEY_REPLYTYPE_NPCEVENT
         OnNpcEventResult(typedDictionaryHandle)

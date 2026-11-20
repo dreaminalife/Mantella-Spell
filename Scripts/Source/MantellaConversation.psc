@@ -2415,8 +2415,8 @@ Function AddActors(Actor[] actorsToAdd)
     Form[] actorsAdded = Utility.CreateFormArray(0)
     While i < actorsToAdd.Length
         Actor possibleNewActor = actorsToAdd[i]
-        int pos = Participants.Find(possibleNewActor)
-        if(pos < 0)
+        ; An empty place is skipped: it would reach the Vanilla Dialogue plugin through SendActorAddedEvents, which can crash the game
+        if possibleNewActor && Participants.Find(possibleNewActor) < 0
             Participants.AddForm(possibleNewActor)
             possibleNewActor.AddToFaction(MantellaConversationParticipantsFaction)
             actorsAdded = Utility.ResizeFormArray(actorsAdded, actorsAdded.Length + 1)
@@ -2630,6 +2630,7 @@ int function buildActorSetting(Actor actorToBuild)
     SKSE_HTTP.setString(handle, mConsts.KEY_ACTOR_RACE, actorToBuild.getrace())
     SKSE_HTTP.setInt(handle, mConsts.KEY_ACTOR_RELATIONSHIPRANK, actorToBuild.getrelationshiprank(PlayerRef))
     SKSE_HTTP.setString(handle, mConsts.KEY_ACTOR_VOICETYPE, actorToBuild.GetVoiceType())
+    SKSE_HTTP.setBool(handle, mConsts.KEY_ACTOR_ISGHOST, actorToBuild.IsGhost())
     if !isPlayerCharacter && repository.IsVoiceClipsInstalled()
         ActorBase npc = actorToBuild.GetActorBase()
         SKSE_HTTP.setString(handle, mConsts.KEY_ACTOR_PLUGIN, MantellaVoiceClips.GetSourcePlugin(npc))

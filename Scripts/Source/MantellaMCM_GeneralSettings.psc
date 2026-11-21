@@ -38,8 +38,10 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_NPCInventoryToggle = mcm.AddToggleOption("Allow Inventory", Repository.NPCInventory)
     mcm.oid_NPCPackageToggle = mcm.AddToggleOption("NPCs Stop to Talk", Repository.NPCPackage)
     mcm.oid_showDialogueItems = mcm.AddToggleOption("Show Dialogue Items", repository.showDialogueItems)   
-    if (repository.IsVanillaDialogueInstalled())
-        mcm.oid_enableVanillaDialogueAwareness = mcm.AddToggleOption("Enable Vanilla Dialogue Awareness", repository.enableVanillaDialogueAwareness)
+    if (repository.IsHeardLinesInstalled())
+        mcm.oid_enableVanillaDialogueAwareness = mcm.AddToggleOption("Vanilla Dialogues", repository.enableVanillaDialogueAwareness)
+        mcm.oid_vanillaDialogueNearbyOverhear = mcm.AddToggleOption("Nearby NPCs Overhear", repository.vanillaDialogueNearbyOverhear)
+        mcm.oid_vanillaDialogueHearingDistance = mcm.AddSliderOption("Hearing Distance (m)", repository.vanillaDialogueHearingDistance)
     endIf
 endfunction
 
@@ -60,6 +62,11 @@ function SliderOptionOpen(MantellaMCM mcm, int optionID, MantellaRepository Repo
         mcm.SetSliderDialogDefaultValue(10)
         mcm.SetSliderDialogRange(5, 300)
         mcm.SetSliderDialogInterval(1)
+    elseIf optionID == mcm.oid_vanillaDialogueHearingDistance
+        mcm.SetSliderDialogStartValue(repository.vanillaDialogueHearingDistance)
+        mcm.SetSliderDialogDefaultValue(20)
+        mcm.SetSliderDialogRange(5, 50)
+        mcm.SetSliderDialogInterval(1)
     endif
 endfunction
 
@@ -76,6 +83,10 @@ function SliderOptionAccept(MantellaMCM mcm, int optionID, float value, Mantella
         mcm.SetSliderOptionValue(optionId, value)
         Repository.radiantFrequency=value
         debug.MessageBox("Please save and reload for this change to take effect")
+    elseIf optionId == mcm.oid_vanillaDialogueHearingDistance
+        mcm.SetSliderOptionValue(optionId, value)
+        Repository.vanillaDialogueHearingDistance = value
+        Repository.SendHeardLinesSettings()
     EndIf
 endfunction
 
@@ -174,7 +185,11 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
         Repository.NPCPackage =! Repository.NPCPackage
         mcm.SetToggleOptionValue(mcm.oid_NPCPackageToggle, Repository.NPCPackage)
     elseIf optionID == mcm.oid_enableVanillaDialogueAwareness
-        Repository.enableVanillaDialogueAwareness =! Repository.enableVanillaDialogueAwareness
+        Repository.SetVanillaDialogues(!Repository.enableVanillaDialogueAwareness)
         mcm.SetToggleOptionValue(mcm.oid_enableVanillaDialogueAwareness, Repository.enableVanillaDialogueAwareness)
+    elseIf optionID == mcm.oid_vanillaDialogueNearbyOverhear
+        Repository.vanillaDialogueNearbyOverhear =! Repository.vanillaDialogueNearbyOverhear
+        mcm.SetToggleOptionValue(mcm.oid_vanillaDialogueNearbyOverhear, Repository.vanillaDialogueNearbyOverhear)
+        Repository.SendHeardLinesSettings()
     endif
 endfunction

@@ -147,7 +147,10 @@ bool property targetEquipmentAmulet auto
 bool property targetEquipmentRightHand auto
 bool property targetEquipmentLeftHand auto
 
-bool property enableVanillaDialogueAwareness auto ; read by the Mantella Vanilla Dialogue SKSE plugin
+bool property enableVanillaDialogueAwareness auto ; Vanilla Dialogues: on or off. Kept under this name so saves keep their value
+bool property vanillaDialogueNearbyOverhear auto ; Nearby NPCs Overhear: on by default
+float property vanillaDialogueHearingDistance auto ; Hearing Distance, in meters
+int property heardLinesMostWaiting auto ; Most lines the plugin keeps waiting for the next request. No MCM entry
 bool property AllowForNPCtoFollow auto ;gia
 ;bool property followingNPCsit auto ;gia
 ;bool property followingNPCsleep auto ;gia
@@ -189,6 +192,11 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    If (lastVersion < 23 || isFirstInit)
+        vanillaDialogueNearbyOverhear = true
+        vanillaDialogueHearingDistance = 20
+        heardLinesMostWaiting = 200
+    EndIf
     If (lastVersion < 22 || isFirstInit)
         MantellaShowHotkey = -1
     EndIf
@@ -348,6 +356,9 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
 
         HttpPort = 4999
     EndIf
+    ; Last, once every default is in place (Vanilla Dialogues itself is turned on in an older block). A new game can send the
+    ; settings before these defaults exist, and would otherwise run with them until the next load
+    SendHeardLinesSettings()
 endFunction
 
 ; The Events page's defaults (MCM version 18)
@@ -489,9 +500,36 @@ bool Function IsVR()
     return Debug.GetVersionNumber() == "1.4.15.0"
 EndFunction
 
-; True when the Mantella Vanilla Dialogue SKSE plugin (MantellaDialogue.dll) is loaded
-bool Function IsVanillaDialogueInstalled()
+; True when the Vanilla Dialogues SKSE plugin (MantellaHeardLines.dll) is loaded
+bool Function IsHeardLinesInstalled()
+    return SKSE.GetPluginVersion("MantellaHeardLines") >= 0
+EndFunction
+
+; True when the old Mantella Vanilla Dialogue mod's plugin (MantellaDialogue.dll) is still loaded
+bool Function IsOldVanillaDialogueInstalled()
     return SKSE.GetPluginVersion("MantellaDialogue") >= 0
+EndFunction
+
+; Turns Vanilla Dialogues on or off and tells the plugin
+Function SetVanillaDialogues(bool on)
+    enableVanillaDialogueAwareness = on
+    SendHeardLinesSettings()
+EndFunction
+
+; Hands the plugin its settings. Needed on every game load and new game, as it catches nothing until it has them
+Function SendHeardLinesSettings()
+    if !IsHeardLinesInstalled()
+        return
+    endIf
+    ; SkyUI's version update does not run on every save, so a missing value is filled in here, as EnsureEventDefaults does
+    if vanillaDialogueHearingDistance <= 0 ; The version 23 defaults never arrived, so Nearby NPCs Overhear wasn't set either
+        vanillaDialogueHearingDistance = 20
+        vanillaDialogueNearbyOverhear = true
+    endIf
+    if heardLinesMostWaiting <= 0
+        heardLinesMostWaiting = 200
+    endIf
+    MantellaHeardLines.SetSettings(enableVanillaDialogueAwareness, vanillaDialogueNearbyOverhear, vanillaDialogueHearingDistance * MantellaShout.METER_UNITS(), heardLinesMostWaiting)
 EndFunction
 
 ; True when the quest tag check plugin (MantellaQuestChecks.dll) is loaded

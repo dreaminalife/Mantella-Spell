@@ -150,6 +150,7 @@ string property KEY_CONTEXT_WEATHER_CLASSIFICATION = "mantella_weather_classific
 string property KEY_CONTEXT_TIME = "mantella_time" auto
 string property KEY_CONTEXT_INGAMEEVENTS = "mantella_ingame_events" auto
 string property KEY_CONTEXT_NEARBYACTORS = "mantella_nearby_actors" auto
+string property KEY_HEARDLINES = "mantella_heard_lines" auto ; What the Vanilla Dialogues plugin heard, handed over with a request
 
 ;player input
 string property KEY_REQUESTTYPE_TTS = "mantella_tts" auto

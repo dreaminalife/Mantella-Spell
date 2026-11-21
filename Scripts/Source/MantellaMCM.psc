@@ -137,6 +137,8 @@ int property oid_NPCAngerToggle auto ;gia
 int property oid_NPCInventoryToggle auto
 int property oid_NPCPackageToggle auto
 int property oid_enableVanillaDialogueAwareness auto
+int property oid_vanillaDialogueNearbyOverhear auto
+int property oid_vanillaDialogueHearingDistance auto
 
 int property oid_debugNPCSelectMode auto
 int property oid_restartMantellaExe Auto
@@ -162,7 +164,7 @@ string MantellaMCMcurrentPage
 ; Whenever a new repository value OR a new MCM setting is added, up the MCM version number returned by `ManatellaMCM.GetVersion()`
 ; and add the corresponding default value in 'MCMRepository.assignDefaultSettings' in a block corresponding to the version number like the examples
 int Function GetVersion()
-    Return 22
+    Return 23
 EndFunction
 
 event OnVersionUpdate(int a_version)
@@ -178,6 +180,9 @@ Event OnConfigOpen()
     repository.EnsureEventDefaults()
     if repository.MantellaShowHotkey == 0 ; 0 is no key, but the menu shows it as Esc. A save the version 22 update never reached has it
         repository.MantellaShowHotkey = -1
+    endIf
+    if repository.vanillaDialogueHearingDistance == 0 ; Never 0 once set: its slider starts at 5
+        repository.assignDefaultSettings(22) ; Only assigns the defaults added in version 23
     endIf
     if repository.shoutHearingDistance == 0 ; Never 0 once set: its slider starts at 5
         repository.assignDefaultSettings(14) ; Only assigns the defaults added in version 15 and later
@@ -548,7 +553,11 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_NPCPackageToggle
 		SetInfoText("NPCs will stop to talk to you and will not engage in non-Mantella conversations.")
 	elseIf optionID == oid_enableVanillaDialogueAwareness
-		SetInfoText("NPCs will know about any dialogue spoken in the vanilla dialogue system.")
+		SetInfoText("NPCs remember the scenes and dialogue-menu talk they hear in the game. Off: nothing new is remembered.")
+	elseIf optionID == oid_vanillaDialogueNearbyOverhear
+		SetInfoText("NPCs near a scene also remember what was said. Off: only the speaker and the person spoken to do.")
+	elseIf optionID == oid_vanillaDialogueHearingDistance
+		SetInfoText("How far away an NPC still hears a line. Also decides whether you count as there. Default: 20")
 
 	elseIf optionID == oid_debugNPCSelectMode
 		SetInfoText("Allows the player to speak to any NPC by initiating a conversation then entering the actor RefID and actor name that the player wishes to speak to")

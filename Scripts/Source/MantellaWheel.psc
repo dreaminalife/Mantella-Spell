@@ -51,6 +51,9 @@ EndFunction
 int Function ACTION_RANDOM_EVENT() global ; Something happens that can involve anyone nearby
     return 16
 EndFunction
+int Function ACTION_VANILLA_DIALOGUES() global ; Turns Vanilla Dialogues on or off. See MantellaRepository.SetVanillaDialogues
+    return 17
+EndFunction
 
 string Function COMPANIONS_KEY() global ; StorageUtil form list on the player, saved with the game
     return "Mantella_Companions"
@@ -116,13 +119,6 @@ Function Open(MantellaRepository repository) global
         else
             count = AddOption(wheel, actions, count, "Join", "Join them", ACTION_JOIN())
         endIf
-        if target
-            if conversation.Participants.HasForm(target)
-                count = AddOption(wheel, actions, count, "Remove", "Send " + name + " away", ACTION_REMOVE_TARGET())
-            else
-                count = AddOption(wheel, actions, count, "Add", "Bring " + name + " in", ACTION_TALK_TO_TARGET())
-            endIf
-        endIf
         if isPlayerIn
             count = AddOption(wheel, actions, count, "Companions", "Add my companions", ACTION_ADD_COMPANIONS())
             if conversation.IsShouting()
@@ -135,6 +131,14 @@ Function Open(MantellaRepository repository) global
             count = AddOption(wheel, actions, count, "Nearby Event", "Something happens nearby", ACTION_NEARBY_EVENT())
             count = AddOption(wheel, actions, count, "Random Event", "Anything can happen", ACTION_RANDOM_EVENT())
             conversation.StartEventScan() ; On another thread: who is nearby, in case Nearby or Random Event is picked
+        endIf
+    endIf
+    ; Last, on every path: up to 7 options before it (the player in a conversation), so the wheel never goes past 8
+    if repository.IsHeardLinesInstalled()
+        if repository.enableVanillaDialogueAwareness
+            count = AddOption(wheel, actions, count, "Vanilla", "Turn off Vanilla Dialogues", ACTION_VANILLA_DIALOGUES())
+        else
+            count = AddOption(wheel, actions, count, "Vanilla", "Turn on Vanilla Dialogues", ACTION_VANILLA_DIALOGUES())
         endIf
     endIf
 
@@ -215,6 +219,13 @@ Function RunAction(int actionId, MantellaRepository repository, MantellaConversa
         conversation.RequestConversationEvent("nearby")
     elseIf actionId == ACTION_RANDOM_EVENT()
         conversation.RequestConversationEvent("random")
+    elseIf actionId == ACTION_VANILLA_DIALOGUES()
+        repository.SetVanillaDialogues(!repository.enableVanillaDialogueAwareness)
+        if repository.enableVanillaDialogueAwareness
+            Debug.Notification("Vanilla Dialogues turned on")
+        else
+            Debug.Notification("Vanilla Dialogues turned off")
+        endIf
     endIf
 EndFunction
 

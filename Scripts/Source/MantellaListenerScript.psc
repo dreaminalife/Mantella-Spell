@@ -30,6 +30,7 @@ event OnInit()
     PlayerRef.AddSpell(MantellaRemoveNpcPower)
     PlayerRef.AddToFaction(repository.giafac_AllowDialogue);gia
     MantellaKillEvents.Register(self)
+    repository.SendHeardLinesSettings() ; A new game never runs OnPlayerLoadGame, and the plugin catches nothing until it has its settings
     Debug.Notification("Please save and reload to activate Mantella.")
 endEvent
 
@@ -78,6 +79,8 @@ Event OnPlayerLoadGame()
     RegisterForModEvent("Mantella_VoiceClipsDone", "OnVoiceClipsDone")
     RequestQuestCheckList()
     SendVoiceClipsSaveLoaded()
+    repository.SendHeardLinesSettings()
+    WarnOldVanillaDialogue()
     RegisterForModEvent("Mantella_NpcInitiativeHotkey", "OnNpcInitiativeHotkey")
     RegisterForModEvent("Mantella_NpcEventHotkey", "OnNpcEventHotkey")
     RegisterForModEvent("Mantella_EventTest", "OnEventTest")
@@ -99,6 +102,13 @@ Event OnPlayerLoadGame()
     _lastRadiantAttemptTime = _lastInitiativeCheckTime
     RegisterForSingleUpdate(tickSeconds)
 EndEvent
+
+; Once per load, while the old Mantella Vanilla Dialogue plugin is still installed: Mantella now does its job
+Function WarnOldVanillaDialogue()
+    if repository.IsOldVanillaDialogueInstalled()
+        Debug.MessageBox("The old Mantella Vanilla Dialogue mod is still installed. Mantella now does its job itself, so NPCs would hear every line twice. Please uninstall that mod.")
+    endIf
+EndFunction
 
 ; Asks MantellaSoftware once for the quest tag checks. If it isn't running yet, the list comes with the first conversation's start reply instead
 Function RequestQuestCheckList()
@@ -568,6 +578,7 @@ bool Function RunNpcInitiativeCheck(bool isManual)
     SKSE_HTTP.setInt(contextHandle, consts.KEY_CONTEXT_TIME, conversation.GetCurrentHourOfDay())
     SKSE_HTTP.setNestedDictionary(handle, consts.KEY_CONTEXT, contextHandle)
 
+    conversation.AddHeardLines(handle) ; Only sent while no conversation is running
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
     _initiativePending = true
     _isInitiativeManual = isManual
@@ -855,6 +866,7 @@ string Function RunNpcEventCheck(bool isManual)
     conversation.AddCurrentWeather(contextHandle)
     SKSE_HTTP.setNestedDictionary(handle, consts.KEY_CONTEXT, contextHandle)
 
+    conversation.AddHeardLines(handle) ; Only sent while no conversation is running
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, consts.HTTP_ROUTE_MAIN)
     _eventPending = true
     _eventSentTime = now

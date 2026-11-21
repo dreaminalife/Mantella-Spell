@@ -345,6 +345,7 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     endIf
     microphoneEnabledLastKnownStatus = repository.microphoneEnabled
 
+    AddHeardLines(handle)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
     ; string address = "http://localhost:" + mConsts.HTTP_PORT + "/" + mConsts.HTTP_ROUTE_MAIN
     ; Debug.Notification("Sent StartConversation http request to " + address)
@@ -352,9 +353,6 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     if (eventHandle)        
         ModEvent.Send(eventHandle)
     endIf
-    if (repository.IsVanillaDialogueInstalled())
-        MantellaVanillaDialogue.notifyConversationStart()
-    endIf 
 endFunction
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -572,6 +570,7 @@ function RequestContinueConversation(bool updateInGameEvents = false)
             microphoneEnabledLastKnownStatus = repository.microphoneEnabled
         endIf
 
+        AddHeardLines(handle)
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
     EndIf
 endFunction
@@ -1411,10 +1410,12 @@ Function TrySendPendingEvent()
     BuildContext()
     SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_CONTEXT, _contextHandle)
     ; Gathering the above takes a moment. If the player ended the conversation meanwhile, MantellaSoftware was told to cancel the event
-    ; before this request existed, so it would write the event anyway. Nothing between this check and the send waits, so it can't change
+    ; before this request existed, so it would write the event anyway. Only AddHeardLines comes between this check and the send. It can
+    ; wait for a moment, but goes after the check, so heard lines are never taken for a request that isn't sent
     if _hasBeenStopped || _pendingEventKind != kind
         return
     endIf
+    AddHeardLines(handle)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
 EndFunction
 
@@ -1966,9 +1967,6 @@ Function CleanupConversation()
     if (handle)        
         ModEvent.Send(handle)
     endIf 
-    if (repository.IsVanillaDialogueInstalled())
-        MantellaVanillaDialogue.notifyConversationEnd()
-    endIf
     Debug.Notification("Conversation ended.")  
     Stop()
 EndFunction
@@ -2011,6 +2009,7 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
             ClearPrebuiltActors() ; Built while the player spoke. Later requests build them fresh
         endIf
 
+        AddHeardLines(handle)
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
     EndIf
 endFunction
@@ -2274,9 +2273,6 @@ Function SendActorAddedEvents(Form[] actorsAdded)
         EndIf
         index += 1
     EndWhile
-    if (repository.IsVanillaDialogueInstalled())
-        MantellaVanillaDialogue.notifyNpcAdded(actorsAdded)
-    endIf
 EndFunction
 
 Function SendActorRemovedEvents(Form[] actorsRemoved)
@@ -2290,9 +2286,6 @@ Function SendActorRemovedEvents(Form[] actorsRemoved)
         endIf 
         index += 1
     EndWhile
-    if (repository.IsVanillaDialogueInstalled())
-        MantellaVanillaDialogue.notifyNpcRemoved(actorsRemoved)
-    endIf
 EndFunction
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2729,6 +2722,17 @@ int[] function BuildNearbyActorsContext()
 
     return nearbyActorHandles
 endFunction
+
+; The lines the Vanilla Dialogues plugin caught since the last request. It forgets them once handed over, so call this only right before sending
+Function AddHeardLines(int handle)
+    if !repository.IsHeardLinesInstalled()
+        return
+    endIf
+    string lines = MantellaHeardLines.TakeLines()
+    if lines != ""
+        SKSE_HTTP.setString(handle, mConsts.KEY_HEARDLINES, lines)
+    endIf
+EndFunction
 
 ; Adds the quest tag check plugin's answers, so MantellaSoftware can tell which quests moved on
 Function AddQuestCheckResults(int handleToAddTo)

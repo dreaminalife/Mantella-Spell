@@ -86,6 +86,12 @@ Event OnPlayerLoadGame()
     RegisterForModEvent("Mantella_EventTest", "OnEventTest")
     RegisterForModEvent("Mantella_TalkTest", "OnTalkTest")
     RegisterForModEvent("Mantella_ActionTest", "OnActionTest")
+    RegisterForModEvent("Mantella_HeardLinesTest", "OnHeardLinesTest")
+    if repository.heardLinesTestOnLoad != 0 ; A save the in-game test of Vanilla Dialogues made: it goes on with its next run
+        float heardLinesRun = repository.heardLinesTestOnLoad as float
+        repository.heardLinesTestOnLoad = 0
+        SendModEvent("Mantella_HeardLinesTest", "", heardLinesRun)
+    endIf
     RegisterForModEvent(NPC_EVENT_BUILD_EVENT(), "OnNpcEventBuild")
     RegisterForMenu("Loading Menu")
     MantellaKillEvents.Register(self) ; Again here, in case this save never ran OnInit with it, or the extender was only just installed
@@ -207,6 +213,11 @@ event OnUpdate()
         float testRun = repository.actionTestRun as float
         repository.actionTestRun = 0
         SendModEvent("Mantella_ActionTest", "", testRun)
+    endIf
+    if repository.heardLinesTestRun != 0 ; Set from the console by the in-game test of Vanilla Dialogues
+        float heardLinesRun = repository.heardLinesTestRun as float
+        repository.heardLinesTestRun = 0
+        SendModEvent("Mantella_HeardLinesTest", "", heardLinesRun)
     endIf
     float now = Utility.GetCurrentRealTime()
     if conversation.IsRunning()
@@ -751,6 +762,10 @@ Event OnActionTest(string eventName, string strArg, float numArg, Form sender)
     else
         MantellaActionTest.Run(repository, conversation, self)
     endIf
+EndEvent
+
+Event OnHeardLinesTest(string eventName, string strArg, float numArg, Form sender)
+    MantellaHeardLinesTest.Run(numArg as int, repository, conversation)
 EndEvent
 
 ; Returns true if a check was sent to the server

@@ -32,6 +32,9 @@ int _contextHandle = 0
 bool _does_accept_player_input = false
 bool _isTalking = false
 bool _hasBeenStopped = true
+; Each start takes the next number, and ending a conversation moves it on too. So a start still being built when the conversation is ended,
+; or when a save made while it was being built is loaded (OnPlayerLoadGame ends it), sees that and isn't sent: what it built is gone by then
+int _startNumber = 0
 Actor _lastNpcToSpeak = None
 string _lastSpeakerName = ""
 string _repeatingMessage = ""
@@ -254,6 +257,8 @@ Function AddNpcEventActor(Actor actorToAdd)
 EndFunction
 
 function StartConversation(Actor[] actorsToStartConversationWith)
+    _startNumber += 1
+    int thisStart = _startNumber
     ; Cleared right away, so an early return can't leave it set for the next conversation
     bool isNpcInitiative = _npcInitiative
     _npcInitiative = false
@@ -345,6 +350,10 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     endIf
     microphoneEnabledLastKnownStatus = repository.microphoneEnabled
 
+    if thisStart != _startNumber
+        Debug.Trace("Mantella: a conversation start was ended, or its save loaded, while it was built. Not sent")
+        return
+    endIf
     AddHeardLines(handle)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
     ; string address = "http://localhost:" + mConsts.HTTP_PORT + "/" + mConsts.HTTP_ROUTE_MAIN
@@ -1922,6 +1931,7 @@ Function EndConversation()
         ClearPendingEvent()
     endIf
     _hasBeenStopped = true
+    _startNumber += 1 ; A start still being built isn't sent
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE,mConsts.KEY_REQUESTTYPE_ENDCONVERSATION)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)

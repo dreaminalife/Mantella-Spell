@@ -17,7 +17,7 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.AddHeaderOption("Vanilla Dialogues")
     mcm.oid_enableVanillaDialogueAwareness = mcm.AddToggleOption("Enabled", repository.enableVanillaDialogueAwareness)
     mcm.AddEmptyOption()
-    ; Vanilla Dialogue Memory (Days), Most Vanilla Dialogue Lines per NPC and Lines That Only Open a Menu are in Mantella, as only Mantella uses them
+    ; Vanilla Dialogue Memory (Days), Most Vanilla Dialogue Lines per NPC and Ignored Dialogue Menu Choices are in Mantella, as only Mantella uses them
     mcm.AddTextOption("More options: Mantella's settings,", "", mcm.OPTION_FLAG_DISABLED)
     mcm.AddTextOption("Other tab.", "", mcm.OPTION_FLAG_DISABLED)
 endfunction

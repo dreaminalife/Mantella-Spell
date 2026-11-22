@@ -188,7 +188,7 @@ Function RunAfterWaitingSave(MantellaRepository repository, MantellaConversation
     endIf
     SetHearing(repository, true, 200)
 
-    ; 6. Menu talk: an answer is kept with the player's question. A line in Lines That Only Open a Menu, and Mantella's own line, are not
+    ; 6. Menu talk: an answer is kept with the player's question. A line in Ignored Dialogue Menu Choices, and Mantella's own line, are not
     Debug.MessageBox("Heard lines test: Hulda, Vignar and Olfrid stand next to you. Talk to Hulda the normal way. Ask her one question, such as about rumors. Then ask to rent a room. Then pick \"I want to speak with you. (Start Mantella conversation)\". The test ends that conversation itself")
     if WaitForConversation(conversation)
         MantellaEventTest.EndConversation(conversation)

@@ -98,7 +98,7 @@ Function Open(MantellaRepository repository) global
     ; Longer ones are shrunk to fit (MantellaRepository.FitWheelTexts), which gets hard to read, so they are kept short
     if !isRunning
         count = AddOption(wheel, actions, count, "Companions", "Talk to my companions", ACTION_TALK_TO_COMPANIONS())
-        count = AddOption(wheel, actions, count, "Say", "Say it to the room", ACTION_SAY_TO_ROOM())
+        count = AddOption(wheel, actions, count, "Say to Room", "Say it to the room", ACTION_SAY_TO_ROOM())
         if target
             count = AddOption(wheel, actions, count, "Talk", "Talk to " + name, ACTION_TALK_TO_TARGET())
             if IsOnCompanionsList(target)
@@ -136,9 +136,9 @@ Function Open(MantellaRepository repository) global
     ; Last, on every path: up to 7 options before it (the player in a conversation), so the wheel never goes past 8
     if repository.IsHeardLinesInstalled()
         if repository.enableVanillaDialogueAwareness
-            count = AddOption(wheel, actions, count, "Vanilla", "Turn off Vanilla Dialogues", ACTION_VANILLA_DIALOGUES())
+            count = AddOption(wheel, actions, count, "Vanilla Dialogues", "Turn off Vanilla Dialogues", ACTION_VANILLA_DIALOGUES())
         else
-            count = AddOption(wheel, actions, count, "Vanilla", "Turn on Vanilla Dialogues", ACTION_VANILLA_DIALOGUES())
+            count = AddOption(wheel, actions, count, "Vanilla Dialogues", "Turn on Vanilla Dialogues", ACTION_VANILLA_DIALOGUES())
         endIf
     endIf
 

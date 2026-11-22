@@ -36,6 +36,11 @@ string property KEY_REQUESTTYPE_INTERRUPT = "mantella_interrupt" auto
 
 string property KEY_REPLYTTYPE_INITCOMPLETED = "mantella_init_completed" auto
 string property KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED = "mantella_start_conversation_completed" auto
+string property KEY_PLAYERSPEAKSFIRST = "mantella_player_speaks_first" auto ; In the reply to the first request: the player gets the turn before the start is sent
+string property KEY_REQUESTTYPE_LISTENBEFORESTART = "mantella_listen_before_start" auto ; The microphone listens while the start is still on its way
+string property KEY_REPLYTYPE_LISTENINGBEFORESTART = "mantella_listening_before_start" auto
+string property KEY_LISTEN_NAMES = "mantella_listen_names" auto
+string property KEY_LISTEN_PLAYERNAME = "mantella_listen_player_name" auto
 
 string property KEY_REPLYTYPE_NPCTALK = "mantella_npc_talk" auto
 string property KEY_REPLYTYPE_PLAYERTALK = "mantella_player_talk" auto

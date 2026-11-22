@@ -153,6 +153,7 @@ string property PAGE_ADVANCED = "Advanced" auto
 string property PAGE_NPCINITIATIVE = "NPC Initiative" auto
 string property PAGE_EVENTS = "Events" autoReadonly ; Was the NPC Events page. Read-only, so a save keeps no old name
 string property PAGE_SHOUT = "Shout Mode" auto
+string property PAGE_VANILLA_DIALOGUES = "Vanilla Dialogues" autoReadonly ; Read-only, so a save keeps no old name
 
 
 
@@ -173,8 +174,8 @@ event OnVersionUpdate(int a_version)
 EndEvent
 
 Event OnConfigOpen()
-    ; SkyUI's version update does not run on every save, so what versions 10, 12, 13, 15, 16 and 18 added is also checked whenever the menu opens
-    if Pages.Length < 9 || Pages[7] != PAGE_EVENTS
+    ; SkyUI's version update does not run on every save, so what versions 10, 12, 13, 15, 16 and 18 added (and the Vanilla Dialogues page) is also checked whenever the menu opens
+    if Pages.Length < 10 || Pages[7] != PAGE_EVENTS
         OnConfigInit()
     endIf
     repository.EnsureEventDefaults()
@@ -201,7 +202,7 @@ EndEvent
 Event OnConfigInit()
 	;this part right here name all the pages we'll need (we can add more pages at the end as long as we update the numbers) and declares some variables
     ModName = "Mantella"
-	Pages = new string[9]
+	Pages = new string[10]
     Pages[0] = PAGE_GENERAL
     Pages[1] = PAGE_PLAYER
 	Pages[2] = PAGE_PLAYERTRACKING
@@ -211,6 +212,7 @@ Event OnConfigInit()
  	Pages[6] = PAGE_NPCINITIATIVE
  	Pages[7] = PAGE_EVENTS
  	Pages[8] = PAGE_SHOUT
+ 	Pages[9] = PAGE_VANILLA_DIALOGUES
  
     playerAllToggle=true
     playerEquipmentAllToggle=true
@@ -253,6 +255,9 @@ Event OnPageReset(string page)
 	elseif page==PAGE_SHOUT
 		MantellaMCM_ShoutSettings.Render(self, repository)
 		MantellaMCMcurrentPage=PAGE_SHOUT
+	elseif page==PAGE_VANILLA_DIALOGUES
+		MantellaMCM_VanillaDialogueSettings.Render(self, repository)
+		MantellaMCMcurrentPage=PAGE_VANILLA_DIALOGUES
  	endif
 EndEvent
 
@@ -276,6 +281,8 @@ Event OnOptionSelect(int optionID)
 		MantellaMCM_NPCEventSettings.OptionUpdate(self,optionID, repository)
 	elseif MantellaMCMcurrentPage ==PAGE_SHOUT
 		MantellaMCM_ShoutSettings.OptionUpdate(self,optionID, repository)
+	elseif MantellaMCMcurrentPage ==PAGE_VANILLA_DIALOGUES
+		MantellaMCM_VanillaDialogueSettings.OptionUpdate(self,optionID, repository)
 	endif
 EndEvent 
 
@@ -294,6 +301,8 @@ Event OnOptionSliderOpen(Int optionId)
         MantellaMCM_NPCEventSettings.SliderOptionOpen(self,optionID, repository)
     elseif MantellaMCMcurrentPage == PAGE_SHOUT
         MantellaMCM_ShoutSettings.SliderOptionOpen(self,optionID, repository)
+    elseif MantellaMCMcurrentPage == PAGE_VANILLA_DIALOGUES
+        MantellaMCM_VanillaDialogueSettings.SliderOptionOpen(self,optionID, repository)
     endIf
 EndEvent
 
@@ -312,6 +321,8 @@ Event OnOptionSliderAccept(Int optionId, Float value)
         MantellaMCM_NPCEventSettings.SliderOptionAccept(self,optionID, value, repository)
     elseif MantellaMCMcurrentPage == PAGE_SHOUT
         MantellaMCM_ShoutSettings.SliderOptionAccept(self,optionID, value, repository)
+    elseif MantellaMCMcurrentPage == PAGE_VANILLA_DIALOGUES
+        MantellaMCM_VanillaDialogueSettings.SliderOptionAccept(self,optionID, value, repository)
     endIf
 EndEvent
 

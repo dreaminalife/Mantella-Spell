@@ -102,6 +102,13 @@ int[] _eventPrebuiltHandles ; Their actor settings, in the same order
 Form[] _shoutJoiners ; Who joined by shouting and is still in the conversation. Kept when Shout is switched off
 string _confirmPrivateText = "" ; The text for the message box of ConfirmPrivate while it is open. "" otherwise
 bool _holdForEventText = false ; An NPC Event's text is shown while its conversation starts: nobody speaks until the box is closed
+; The player's turn before the start: with Automatic Greeting off the player speaks first, so they can type or speak while the game
+; gathers the details for the start. What they said goes out once MantellaSoftware has the conversation (EndEarlyTurn)
+bool _isEarlyTurnPending = false ; This start can give the early turn, once MantellaSoftware's reply to the first request says the player speaks first
+bool _isEarlyTurn = false ; The early turn is on. Ends with the first reply after the start
+string _earlyLine = "" ; Typed during the early turn
+bool _isEarlyListening = false ; The microphone started listening during the early turn
+Actor[] _startActors ; Who the conversation starts with, so the microphone hears their names from the first line
 
 ; Never assigned, so always None: arrays are cleared with these. Assigning None to an array fails in the game ("Cannot cast from None to
 ; Actor[]"), and a local array declared "= None" then can't take an array at all, so it stays None
@@ -209,9 +216,10 @@ bool Function IsEnding()
     return _hasBeenStopped
 EndFunction
 
-; It is the player's turn: the game waits for the text box or the push-to-talk key. Used by the in-game test (MantellaEventTest)
+; It is the player's turn: the game waits for the text box or the push-to-talk key. Used by the in-game test (MantellaEventTest).
+; Not the early turn: the conversation hasn't started yet
 bool Function IsPlayersTurn()
-    return _does_accept_player_input
+    return _does_accept_player_input && !_isEarlyTurn
 EndFunction
 
 ; Says the line as if the player typed it in the text box. Only during the player's turn. Used by the in-game test of the talk settings (MantellaTalkTest)
@@ -221,7 +229,16 @@ Function SayAsPlayer(string line)
     endIf
     _does_accept_player_input = False ; As the text box does after Enter
     ClearRepeatingMessage()
-    sendRequestForPlayerInput(line, updateContext=True)
+    SendTypedLine(line)
+EndFunction
+
+; What the player typed. During the early turn it waits until MantellaSoftware has the conversation (EndEarlyTurn)
+Function SendTypedLine(string line)
+    if _isEarlyTurn
+        _earlyLine = line
+    else
+        sendRequestForPlayerInput(line, updateContext=True)
+    endIf
 EndFunction
 
 ; How many NPC lines have arrived from MantellaSoftware. Used by the in-game test (MantellaEventTest) to pick an event while one is spoken
@@ -279,6 +296,12 @@ function StartConversation(Actor[] actorsToStartConversationWith)
     _hasNpcEventMonitorValues = false
     _sendQuestChecksCatchUp = false
     ClearShout()
+    _isEarlyTurn = false
+    _earlyLine = ""
+    _isEarlyListening = false
+    _startActors = actorsToStartConversationWith
+    ; Not when an NPC speaks first (NPC Initiative, NPC Events), or the player already said their line (saying something to the room)
+    _isEarlyTurnPending = !isNpcInitiative && !IsNpcEvent() && !isRoomStart && actorsToStartConversationWith.Length >= 2 && ContainsActor(actorsToStartConversationWith, PlayerRef)
     _actorHandleActors = _noForms ; Everyone is built fresh, or taken from _prebuiltActors
     _staleActors = _noForms
     if(actorsToStartConversationWith.Length > 2 && !IsNpcEvent() && !isGroupStart) ; An NPC Event or a group start can start with more people
@@ -406,7 +429,16 @@ event OnHttpReplyReceived(int typedDictionaryHandle)
     ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to trace a message", 2)
     string replyType = SKSE_HTTP.getString(typedDictionaryHandle, mConsts.KEY_REPLYTYPE ,"error")
     ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to determine reply type", 2)
-    IF replyType == mConsts.KEY_REPLYTTYPE_INITCOMPLETED || replyType == mConsts.KEY_REPLYTYPE_INTERRUPTRECEIVED
+    IF replyType == mConsts.KEY_REPLYTTYPE_INITCOMPLETED
+        if _isEarlyTurnPending
+            _isEarlyTurnPending = false
+            int thisStart = _startNumber
+            if SKSE_HTTP.getBool(typedDictionaryHandle, mConsts.KEY_PLAYERSPEAKSFIRST, false) && thisStart == _startNumber ; Not ended meanwhile
+                _isEarlyTurn = true
+                GivePlayerTheTurn()
+            endIf
+        endIf
+    ElseIf replyType == mConsts.KEY_REPLYTYPE_INTERRUPTRECEIVED || replyType == mConsts.KEY_REPLYTYPE_LISTENINGBEFORESTART
         None
     ElseIf replyType == mConsts.KEY_REPLYTYPE_SHOWRECEIVED
         ; Shown once the picture is taken, so the note isn't in it
@@ -436,8 +468,12 @@ function ContinueConversation(string nextAction, int handle)
     if SKSE_HTTP.hasKey(handle, mConsts.KEY_GAMEMASTERMODE) ; In the start, continue and event replies. It can change mid-conversation
         _isGameMasterMode = SKSE_HTTP.getBool(handle, mConsts.KEY_GAMEMASTERMODE, false)
     endIf
+    if _isEarlyTurn && nextAction != mConsts.KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED && nextAction != mConsts.KEY_REPLYTYPE_PLAYERTALK
+        EndEarlyTurn(false) ; An NPC speaks first after all
+    endIf
     if(nextAction == mConsts.KEY_REPLYTTYPE_STARTCONVERSATIONCOMPLETED)
         _hasBeenStopped = false
+        _isEarlyTurnPending = false ; A late reply to the first request doesn't give the turn now
         if(SKSE_HTTP.hasKey(handle,mConsts.KEY_STARTCONVERSATION_USENARRATOR))
             _useNarrator = SKSE_HTTP.getBool(handle, mConsts.KEY_STARTCONVERSATION_USENARRATOR, false)
         endif
@@ -462,7 +498,9 @@ function ContinueConversation(string nextAction, int handle)
         ProcessNpcSpeak(npcTalkHandle)
         RequestContinueConversation()
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_PLAYERTALK)
-        If (_pendingEventKind != "")
+        If (_isEarlyTurn)
+            EndEarlyTurn(true)
+        ElseIf (_pendingEventKind != "")
             ; An event was picked: it is sent now, in the player's turn, instead of listening to the player
             _isEventTurn = true
             TrySendPendingEvent()
@@ -512,6 +550,29 @@ Function GivePlayerTheTurn()
     Else
         ShowRepeatingMessage("Awaiting player input...")
     EndIf
+EndFunction
+
+; The first reply after the start ends the early turn. With the player's turn, what the player typed meanwhile is sent now, and a
+; microphone already listening gets the request for what was said. Otherwise the turn is taken back
+Function EndEarlyTurn(bool isPlayersTurn)
+    _isEarlyTurn = false
+    string line = _earlyLine
+    _earlyLine = ""
+    bool wasListening = _isEarlyListening
+    _isEarlyListening = false
+    If (!isPlayersTurn)
+        _does_accept_player_input = false
+        ClearRepeatingMessage()
+        If (line != "")
+            Debug.Notification("Your line wasn't sent")
+        EndIf
+    ElseIf (line != "")
+        sendRequestForPlayerInput(line, updateContext=True)
+    ElseIf (wasListening)
+        _does_accept_player_input = True
+        sendRequestForVoiceTranscribe()
+    EndIf
+    ; Otherwise the player still has the turn: the text box or the push-to-talk key works as usual from now on
 EndFunction
 
 function RequestContinueConversation(bool updateInGameEvents = false)
@@ -1932,6 +1993,8 @@ Function EndConversation()
     endIf
     _hasBeenStopped = true
     _startNumber += 1 ; A start still being built isn't sent
+    _isEarlyTurnPending = false
+    _isEarlyTurn = false ; Nothing more is sent for the early turn
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE,mConsts.KEY_REQUESTTYPE_ENDCONVERSATION)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
@@ -1953,6 +2016,11 @@ Function CleanupConversation()
     _sendQuestChecksCatchUp = false
     _isRoomFirstTurn = false
     _roomLine = ""
+    _isEarlyTurnPending = false
+    _isEarlyTurn = false
+    _earlyLine = ""
+    _isEarlyListening = false
+    _startActors = _noActors
     if _roomMicScanId != 0
         CancelRoomScan(_roomMicScanId) ; Ended before the player spoke
         _roomMicScanId = 0
@@ -2082,7 +2150,11 @@ function sendRequestForVoiceTranscribe()
         _does_accept_player_input = False
     endif
 
-    if(!_hasBeenStopped)
+    if _isEarlyTurn
+        ; MantellaSoftware has no conversation yet: it only starts listening. What was said is asked for once it has (EndEarlyTurn)
+        _isEarlyListening = true
+        SendListenBeforeStart()
+    elseIf(!_hasBeenStopped)
         int handle = SKSE_HTTP.createDictionary()
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_PLAYERINPUT)
         SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE_PLAYERINPUT, "")
@@ -2091,6 +2163,28 @@ function sendRequestForVoiceTranscribe()
     endIf
     ShowRepeatingMessage("Listening...")
 endFunction
+
+; With the names of who the conversation starts with, so the microphone hears them right from the first line
+Function SendListenBeforeStart()
+    int handle = SKSE_HTTP.createDictionary()
+    SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE, mConsts.KEY_REQUESTTYPE_LISTENBEFORESTART)
+    if repository.useHotkeyToStartMic
+        SKSE_HTTP.setString(handle, mConsts.KEY_INPUTTYPE, mConsts.KEY_INPUTTYPE_PTT)
+    else
+        SKSE_HTTP.setString(handle, mConsts.KEY_INPUTTYPE, mConsts.KEY_INPUTTYPE_MIC)
+    endIf
+    string[] names = Utility.CreateStringArray(_startActors.Length) ; The player's place stays empty: MantellaSoftware skips it
+    int i = 0
+    while i < _startActors.Length
+        if _startActors[i] && _startActors[i] != PlayerRef
+            names[i] = _startActors[i].GetDisplayName()
+        endIf
+        i += 1
+    endWhile
+    SKSE_HTTP.setStringArray(handle, mConsts.KEY_LISTEN_NAMES, names)
+    SKSE_HTTP.setString(handle, mConsts.KEY_LISTEN_PLAYERNAME, PlayerRef.GetDisplayName())
+    SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+EndFunction
 
 bool _isTextBoxOpen = false ; One text box at a time: presses while it is open are ignored
 
@@ -2109,7 +2203,7 @@ function GetPlayerTextInput()
     if (result && result != "" && _does_accept_player_input)
         _does_accept_player_input = False ; Before the details are gathered, so the talk key does nothing meanwhile
         ClearRepeatingMessage()
-        sendRequestForPlayerInput(result, updateContext=True)
+        SendTypedLine(result)
     endIf
 endFunction
 

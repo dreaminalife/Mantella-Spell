@@ -764,7 +764,7 @@ Event OnKeyDown(int KeyCode)
         elseIf KeyCode == MantellaRadiantHotkey
             radiantEnabled =! radiantEnabled
             if radiantEnabled == True
-                Debug.Notification("Radiant Dialogue enabled.")
+                Debug.Notification("Radiant Dialogue enabled. It is deprecated: try NPC Event instead.")
             else
                 Debug.Notification("Radiant Dialogue disabled.")
             endIf

@@ -19,14 +19,14 @@ function LeftColumn(MantellaMCM mcm, MantellaRepository Repository) global
     mcm.oid_keymapPromptHotkey = mcm.AddKeyMapOption("Open Text Prompt", repository.MantellaListenerTextHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
     mcm.oid_keymapEndHotkey = mcm.AddKeyMapOption("End Conversation / Remove NPC", repository.MantellaEndHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
     mcm.oid_keymapCustomGameEventHotkey = mcm.AddKeyMapOption("Add Custom Game Event", repository.MantellaCustomGameEventHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
-    mcm.oid_keymapRadiantHotkey = mcm.AddKeyMapOption("Toggle Radiant Dialogue", repository.MantellaRadiantHotkey, mcm.OPTION_FLAG_WITH_UNMAP) 
+    mcm.oid_keymapRadiantHotkey = mcm.AddKeyMapOption("Toggle Radiant Dialogue (deprecated)", repository.MantellaRadiantHotkey, mcm.OPTION_FLAG_WITH_UNMAP) 
     mcm.oid_keymapInterruptHotkey = mcm.AddKeyMapOption("Interrupt NPCs", repository.MantellaInterruptHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
     mcm.oid_keymapWheelHotkey = mcm.AddKeyMapOption("Open Conversation Wheel", repository.MantellaWheelHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
     mcm.oid_keymapShowHotkey = mcm.AddKeyMapOption("Show Them What You See", repository.MantellaShowHotkey, mcm.OPTION_FLAG_WITH_UNMAP)
 endfunction
 
 function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
-    mcm.AddHeaderOption("Radiant Dialogue")
+    mcm.AddHeaderOption("Radiant Dialogue (deprecated)")
     mcm.oid_radiantenabled = mcm.AddToggleOption("Enabled", repository.radiantEnabled)
     mcm.oid_radiantdistance = mcm.AddSliderOption("Trigger Distance",repository.radiantDistance)
     mcm.oid_radiantfrequency = mcm.AddSliderOption("Trigger Frequency",repository.radiantFrequency)

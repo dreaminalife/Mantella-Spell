@@ -360,7 +360,7 @@ Event OnOptionHighlight (Int optionID)
 	elseIf optionID == oid_keymapCustomGameEventHotkey	
 		SetInfoText("Opens a text prompt to enter a custom game event (eg 'The house is on fire').")
 	elseIf optionID == oid_keymapRadiantHotkey	
-		SetInfoText("Toggle radiant conversations.")
+		SetInfoText("Deprecated: NPC Event (Events page) is the new radiant dialogue.\nToggle radiant conversations.")
 	elseIf optionID == oid_keymapInterruptHotkey
 		SetInfoText("Stops the NPCs mid-response and gives you the turn. Then reply with the Open Text Prompt hotkey or the mic.")
 	elseIf optionID == oid_keymapWheelHotkey
@@ -372,7 +372,7 @@ Event OnOptionHighlight (Int optionID)
 		SetInfoText("Show the dialogue tree entries to start a conversation or add and remove NPCs from it.")
 
 	elseIf optionID == oid_radiantenabled
-		SetInfoText("Starts a Mantella conversation between the nearest two NPCs to the player at a given frequency. \nNPCs must both be stationary when a radiant dialogue attempt is made.")
+		SetInfoText("Deprecated: NPC Event (Events page) is the new radiant dialogue.\nStarts a Mantella conversation between the nearest two NPCs to the player at a given frequency. \nNPCs must both be stationary when a radiant dialogue attempt is made.")
 	elseIf optionID == oid_radiantdistance
 		SetInfoText("How far from the player (in meters) radiant dialogues can begin. \nDefault: 20")
 	elseIf optionID == oid_radiantfrequency

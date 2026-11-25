@@ -255,9 +255,10 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
         npcInitiativeMaxFollowers = 2
         showNpcInitiativeMessages = false
     EndIf
-    ; 7 is the Mantella Vanilla Dialogue mod's version, which already set this. 8 is this add-on's previous release, which didn't
+    ; Vanilla Dialogues starts off on a new game: players turn it on in the MCM or the Conversation Wheel
+    ; (7 is the Mantella Vanilla Dialogue mod's version, which already set this. 8 is this add-on's previous release, which didn't)
     If (lastVersion < 7 || lastVersion == 8 || isFirstInit)
-        enableVanillaDialogueAwareness = true
+        enableVanillaDialogueAwareness = false
     EndIf
     If (lastVersion < 8 || isFirstInit)
         MantellaInterruptHotkey = -1
@@ -279,7 +280,7 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
         showRadiantDialogueMessages = true
     EndIf
     If (lastVersion < 1 || isFirstInit)
-        microphoneEnabled = true
+        microphoneEnabled = false ; Players type by default (H opens the typing box); they turn the microphone on in the MCM
         useHotkeyToStartMic = false
         MantellaEffectResponseTimer = 180
 

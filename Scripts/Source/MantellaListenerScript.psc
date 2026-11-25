@@ -64,8 +64,9 @@ string Function getPlayerName(bool isStartOfSentence = True)
 EndFunction
 
 Event OnPlayerLoadGame()
+    conversation.RegisterForConversationEvents() ; Its own quest script never gets OnPlayerLoadGame
     If(conversation.IsRunning())
-        conversation.EndConversation()
+        conversation.EndAfterSaveLoad()
     endif
     ; If (MantellaMCMQuest.IsRunning() || MantellaMCMQuest.IsNotProperlyInitialised())
     ;     Debug.MessageBox("Detecting old version of Mantella in this save. MCM settings will be reset once.")

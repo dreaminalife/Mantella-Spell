@@ -33,7 +33,7 @@ bool _does_accept_player_input = false
 bool _isTalking = false
 bool _hasBeenStopped = true
 ; Each start takes the next number, and ending a conversation moves it on too. So a start still being built when the conversation is ended,
-; or when a save made while it was being built is loaded (OnPlayerLoadGame ends it), sees that and isn't sent: what it built is gone by then
+; or when a save made while it was being built is loaded (EndAfterSaveLoad ends it), sees that and isn't sent: what it built is gone by then
 int _startNumber = 0
 Actor _lastNpcToSpeak = None
 string _lastSpeakerName = ""
@@ -121,10 +121,8 @@ event OnInit()
     RegisterForConversationEvents()
 EndEvent
 
-event OnPlayerLoadGame()
-    RegisterForConversationEvents()
-endEvent
-
+; Also called by MantellaListenerScript on every save load: a quest script never gets OnPlayerLoadGame. Without it, a save where this
+; script stopped getting MantellaSoftware's replies could never end its conversation, so it could never start a new one either
 Function RegisterForConversationEvents()
     RegisterForModEvent("SKSE_HTTP_OnHttpReplyReceived","OnHttpReplyReceived")
     RegisterForModEvent("SKSE_HTTP_OnHttpErrorReceived","OnHttpErrorReceived")
@@ -524,6 +522,9 @@ function ContinueConversation(string nextAction, int handle)
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_SHOUT_ADDACTOR)
         AddShoutActors(SKSE_HTTP.getIntArray(handle, mConsts.KEY_SHOUT_ADDACTOR_REFIDS))
     elseIf(nextAction == mConsts.KEY_REPLYTYPE_ENDCONVERSATION)
+        if !IsRunning()
+            return ; Already ended in the game, e.g. by loading a save (EndAfterSaveLoad)
+        endIf
         if !_hasBeenStopped && Participants.GetSize() < 2 && IsPlayerInConversation()
             Debug.Notification("Nobody answers") ; The player said something to the room. Not when the player ended it
         endIf
@@ -1998,6 +1999,15 @@ Function EndConversation()
     int handle = SKSE_HTTP.createDictionary()
     SKSE_HTTP.setString(handle, mConsts.KEY_REQUESTTYPE,mConsts.KEY_REQUESTTYPE_ENDCONVERSATION)
     SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
+EndFunction
+
+; A save was loaded with a conversation still on. It ends here in the game right away: MantellaSoftware has no conversation after a
+; reload, so waiting for its reply gains nothing, and a reply that never arrives would leave the conversation on for good.
+; MantellaSoftware is still told, so it saves what the NPCs remember of a conversation it still has. Its reply then finds the quest
+; stopped and does nothing
+Function EndAfterSaveLoad()
+    EndConversation()
+    CleanupConversation()
 EndFunction
 
 Function CleanupConversation()

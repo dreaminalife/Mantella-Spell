@@ -98,7 +98,7 @@ Function RunScenes(MantellaRepository repository, MantellaConversation conversat
     repository.radiantEnabled = false
     repository.npcInitiativeEnabled = false
     repository.npcEventEnabled = false
-    SetHearing(repository, true, 200)
+    SetHearing(repository, true, 500)
 
     Actor player = Game.GetPlayer()
     PlaceTogether(vignar, olfrid, hulda, nearSpot)
@@ -128,7 +128,7 @@ Function RunScenes(MantellaRepository repository, MantellaConversation conversat
     endIf
 
     ; 2. Nearby NPCs Overhear off, and the player far away: only the two speakers keep it, and the player wasn't there
-    SetHearing(repository, false, 200)
+    SetHearing(repository, false, 500)
     PlaceTogether(vignar, olfrid, hulda, nearSpot) ; People wander off after a while although told to stay, so before each scene they are placed again
     player.MoveTo(farSpot, 100.0, 0.0, 0.0)
     PlayScene(feud, "2, Nearby NPCs Overhear off, player away")
@@ -137,7 +137,7 @@ Function RunScenes(MantellaRepository repository, MantellaConversation conversat
     HandOver(conversation, hulda, "part 2")
 
     ; 3. Vanilla Dialogues off, the way the wheel and the MCM turn it off: nothing is caught
-    SetHearing(repository, true, 200)
+    SetHearing(repository, true, 500)
     repository.SetVanillaDialogues(false)
     PlayScene(feud, "3, Vanilla Dialogues off")
     HandOver(conversation, hulda, "part 3")
@@ -186,7 +186,7 @@ Function RunAfterWaitingSave(MantellaRepository repository, MantellaConversation
     if nearSpot
         PlaceTogether(vignar, olfrid, hulda, nearSpot)
     endIf
-    SetHearing(repository, true, 200)
+    SetHearing(repository, true, 500)
 
     ; 6. Menu talk: an answer is kept with the player's question. A line in Ignored Dialogue Menu Choices, and Mantella's own line, are not
     Debug.MessageBox("Heard lines test: Hulda, Vignar and Olfrid stand next to you. Talk to Hulda the normal way. Ask her one question, such as about rumors. Then ask to rent a room. Then pick \"I want to speak with you. (Start Mantella conversation)\". The test ends that conversation itself")

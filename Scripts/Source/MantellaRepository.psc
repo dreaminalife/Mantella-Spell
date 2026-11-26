@@ -197,7 +197,7 @@ function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
     If (lastVersion < 23 || isFirstInit)
         vanillaDialogueNearbyOverhear = true
         vanillaDialogueHearingDistance = 20
-        heardLinesMostWaiting = 200
+        heardLinesMostWaiting = 500
     EndIf
     If (lastVersion < 22 || isFirstInit)
         MantellaShowHotkey = -1
@@ -529,8 +529,9 @@ Function SendHeardLinesSettings()
         vanillaDialogueHearingDistance = 20
         vanillaDialogueNearbyOverhear = true
     endIf
-    if heardLinesMostWaiting <= 0
-        heardLinesMostWaiting = 200
+    ; 200 was the default before 500, and no MCM entry sets it, so a save still holding 200 moves up
+    if heardLinesMostWaiting <= 0 || heardLinesMostWaiting == 200
+        heardLinesMostWaiting = 500
     endIf
     MantellaHeardLines.SetSettings(enableVanillaDialogueAwareness, vanillaDialogueNearbyOverhear, vanillaDialogueHearingDistance * MantellaShout.METER_UNITS(), heardLinesMostWaiting)
 EndFunction

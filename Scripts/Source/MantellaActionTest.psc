@@ -415,6 +415,283 @@ Function RunAdvanced(MantellaRepository repository, MantellaConversation convers
     Done()
 EndFunction
 
+; Other mods' actions (bat mtao, or bat mtaoa with Advanced Actions on): those of Actions For Mantella - Expanded Sex Actions. That mod's
+; own script does them, so this checks what the game shows: the NPC's clothes come off and go back on (Undress, Redress), and OStim starts
+; a scene (SexWithPlayer, GroupSexWithPlayer, SexWithNPC), seen by OStim's "ostim_thread_start", which MantellaListenerScript counts while
+; this runs. Without Advanced Actions, the NPC starts its line with the action's name, and you also type just the name (Undress, Redress).
+; A scene with you is ended with OStim's End key; the one between two NPCs ends by itself
+Function RunOtherMods(MantellaRepository repository, MantellaConversation conversation, MantellaListenerScript listener, bool advanced) global
+    if conversation.IsRunning()
+        Stop("end the conversation first")
+        return
+    endIf
+    Note("starting")
+    string how = "line"
+    string t = "" ; The stand-in picks the action as a model would for a cue starting with t
+    if advanced
+        how = "tool"
+        t = "t"
+        Note("other mods' actions, with Advanced Actions on")
+    else
+        Note("other mods' actions")
+    endIf
+    Utility.Wait(3.0) ; The place has just loaded
+    Actor npc = FindNpc(repository, conversation)
+    if !npc
+        Note("FAIL setup: nobody to test with. It needs an NPC within 20 m who isn't a guard, a child or a follower")
+        Done()
+        return
+    endIf
+    Actor player = Game.GetPlayer()
+    bool micWas = repository.microphoneEnabled
+    bool followWas = player.IsInFaction(repository.giafac_AllowFollower)
+    repository.microphoneEnabled = false ; The test types the player's lines
+    SetFaction(repository.giafac_AllowFollower, true) ; The menu's Allow Follow, for Follow
+    ; OStim's settings for the test, put back at the end: no menu to pick furniture or to add people nearby (nobody would answer it), the
+    ; scene where everyone stands (no walking to a bed first), and scenes between NPCs of 15 seconds instead of 5 minutes, so the next can start
+    float selectFurnitureWas = SetOStimSetting(0x000DA7, 0.0) ; OStimSelectFurniture
+    float addActorsWas = SetOStimSetting(0x000E45, 0.0) ; OStimAddActorsAtStart
+    float useFurnitureWas = SetOStimSetting(0x000DA6, 0.0) ; OStimUseFurniture
+    float npcSceneLengthWas = SetOStimSetting(0x000E2F, 15000.0) ; OStimNPCSceneDuration, in milliseconds
+    listener.WatchOStimScenes(true)
+
+    if Start(conversation, npc)
+        if !WearsClothes(npc)
+            Note("SKIP undress-" + how + " " + npc.GetDisplayName() + " wears nothing on the body to take off")
+            Note("SKIP redress-" + how + " " + npc.GetDisplayName() + " wears nothing on the body to take off")
+            if !advanced
+                Note("SKIP undress-typed " + npc.GetDisplayName() + " wears nothing on the body to take off")
+                Note("SKIP redress-typed " + npc.GetDisplayName() + " wears nothing on the body to take off")
+            endIf
+        else
+            UndressAndRedress(conversation, npc, "ACTIONTEST_" + t + "undress Take your clothes off.", "ACTIONTEST_" + t + "redress Get dressed again.", how, "")
+            if !advanced
+                UndressAndRedress(conversation, npc, "Undress", "Redress", "typed", "typing ")
+            endIf
+        endIf
+
+        ; The mod also does something on Mantella's own Unfollow (sent with its details, so with Advanced Actions on): it stops Mantella's
+        ; follower quest. The NPC must stop following, and be able to follow you again after
+        SayCue(conversation, t + "follow", "Come with me.")
+        Check(BecomesFollower(repository, npc), "follow-" + how, "Follow: the NPC follows you")
+        MantellaTalkTest.WaitForTurn(conversation)
+        SayCue(conversation, t + "unfollow", "You can stop following me now.")
+        Check(StopsFollowing(repository, npc), "unfollow-" + how, "Unfollow: the NPC stops following you")
+        MantellaTalkTest.WaitForTurn(conversation)
+        SayCue(conversation, t + "follow", "Actually, come with me after all.")
+        Check(BecomesFollower(repository, npc), "follow-again-" + how, "Follow after Unfollow: the NPC follows you again")
+        MantellaTalkTest.WaitForTurn(conversation)
+        SayCue(conversation, t + "unfollow", "No, stay here.")
+        Check(StopsFollowing(repository, npc), "unfollow-again-" + how, "Unfollow again: the NPC stops following you again")
+        MantellaTalkTest.WaitForTurn(conversation)
+
+        SceneWithPlayer(conversation, listener, npc, None, "ACTIONTEST_" + t + "sexplayer Let's go to bed together.", "sexwithplayer-" + how, "SexWithPlayer: OStim starts a scene with you")
+        if !advanced
+            SceneWithPlayer(conversation, listener, npc, None, "SexWithPlayer", "sexwithplayer-typed", "typing SexWithPlayer: OStim starts a scene with you")
+        endIf
+        MantellaEventTest.EndConversation(conversation)
+
+        ; The scenes for several NPCs need a group conversation with someone else nearby
+        Actor other = FindSecondNpc(repository, conversation, npc)
+        if !other
+            NoteGroupFailed(how, advanced, "nobody else nearby for a group conversation")
+        elseIf StartGroup(conversation, npc, other)
+            ; Each line names only the NPC, who then answers first. Should the other one answer too, the same action is already done
+            ; (both are in the scene, so OStim starts no second one), or a second scene with you starts, which is ended too
+            string both = npc.GetDisplayName() + " and " + other.GetDisplayName()
+            string groupCue = "ACTIONTEST_" + t + "groupsex@" + AsDetail(npc.GetDisplayName()) + "+" + AsDetail(other.GetDisplayName())
+            SceneWithPlayer(conversation, listener, npc, other, groupCue + " " + npc.GetDisplayName() + ", let's all go to bed together.", "groupsexwithplayer-" + how, "GroupSexWithPlayer: OStim starts a scene with you, " + both)
+            if !advanced
+                ; Typed: the NPC who joined last does it, with everyone in the conversation
+                SceneWithPlayer(conversation, listener, npc, other, "GroupSexWithPlayer", "groupsexwithplayer-typed", "typing GroupSexWithPlayer: OStim starts a scene with you, " + both)
+                ; Typed: the NPC who joined last does it, with the only other NPC
+                SceneOfNpcs(conversation, listener, npc, other, "SexWithNPC", "sexwithnpc-typed", "typing SexWithNPC: OStim starts a scene with " + both)
+            endIf
+            ; Who it is with: the only other NPC in the conversation for the line, the one named after the cue for the model
+            SceneOfNpcs(conversation, listener, npc, other, "ACTIONTEST_" + t + "sexnpc@" + AsDetail(other.GetDisplayName()) + " " + npc.GetDisplayName() + ", why don't you take your friend here to bed?", "sexwithnpc-" + how, "SexWithNPC: OStim starts a scene with " + both)
+            MantellaEventTest.EndConversation(conversation)
+        else
+            NoteGroupFailed(how, advanced, "the group conversation with " + npc.GetDisplayName() + " and " + other.GetDisplayName() + " didn't start")
+        endIf
+    else
+        Note("FAIL setup: the conversation with " + npc.GetDisplayName() + " didn't start. Is Mantella running with the test's settings?")
+    endIf
+
+    ; Put back what the test changed
+    listener.WatchOStimScenes(false)
+    PutOStimSettingBack(0x000DA7, selectFurnitureWas)
+    PutOStimSettingBack(0x000E45, addActorsWas)
+    PutOStimSettingBack(0x000DA6, useFurnitureWas)
+    PutOStimSettingBack(0x000E2F, npcSceneLengthWas)
+    if IsFollowing(repository, npc)
+        MantellaFollowerUtils.DismissFollower(npc, repository.gia_FollowerQst, repository.giafac_Following)
+    endIf
+    SetFaction(repository.giafac_AllowFollower, followWas)
+    repository.microphoneEnabled = micWas
+    Done()
+EndFunction
+
+; Says the line (a cue, or just an action's name), checks that OStim starts a scene with you, and ends it with OStim's End key. Once the
+; NPCs are done answering, ends one more that started after the first ended (the other NPC did the same)
+Function SceneWithPlayer(MantellaConversation conversation, MantellaListenerScript listener, Actor npc, Actor other, string line, string id, string text) global
+    KeepTalkingWith(conversation, npc, other)
+    int started = listener.OStimScenesStarted
+    int ended = listener.OStimScenesEnded
+    Say(conversation, line)
+    Check(SceneStarts(listener, started), id, text)
+    EndPlayerScene(listener, ended)
+    KeepTalkingWith(conversation, npc, other)
+    MantellaTalkTest.WaitForTurn(conversation)
+    EndPlayerScene(listener, listener.OStimScenesEnded)
+EndFunction
+
+; Says the line, checks that OStim starts a scene between the two NPCs, and waits for it to end (shortened for the test)
+Function SceneOfNpcs(MantellaConversation conversation, MantellaListenerScript listener, Actor npc, Actor other, string line, string id, string text) global
+    KeepTalkingWith(conversation, npc, other)
+    int started = listener.OStimScenesStarted
+    int ended = listener.OStimScenesEnded
+    Say(conversation, line)
+    bool ok = SceneStarts(listener, started)
+    Check(ok, id, text)
+    MantellaTalkTest.WaitForTurn(conversation)
+    if ok && !SceneEnds(listener, ended, 60.0)
+        Note("the scene between the NPCs didn't end within a minute")
+    endIf
+EndFunction
+
+; Undress, then Redress. Redress can only be checked once the clothes came off: otherwise it would pass without doing anything
+Function UndressAndRedress(MantellaConversation conversation, Actor npc, string undressLine, string redressLine, string how, string typing) global
+    Say(conversation, undressLine)
+    bool undressed = ClothesBecome(npc, false)
+    Check(undressed, "undress-" + how, typing + "Undress: the NPC takes their clothes off")
+    MantellaTalkTest.WaitForTurn(conversation)
+    if !undressed
+        Note("SKIP redress-" + how + " the clothes never came off, so putting them back on can't be checked")
+        return
+    endIf
+    Say(conversation, redressLine)
+    Check(ClothesBecome(npc, true), "redress-" + how, typing + "Redress: the NPC puts their clothes back on")
+    MantellaTalkTest.WaitForTurn(conversation)
+EndFunction
+
+; A scene can end the conversation: it starts again, with both NPCs when other is given
+Function KeepTalkingWith(MantellaConversation conversation, Actor npc, Actor other) global
+    if conversation.IsRunning()
+        return
+    endIf
+    if other
+        StartGroup(conversation, npc, other)
+    else
+        Start(conversation, npc)
+    endIf
+EndFunction
+
+; Sets one of OStim's settings (a global of OStim.esp) and returns what it was, or -1 without OStim
+float Function SetOStimSetting(int formId, float value) global
+    GlobalVariable setting = Game.GetFormFromFile(formId, "OStim.esp") as GlobalVariable
+    if !setting
+        return -1.0
+    endIf
+    float was = setting.GetValue()
+    setting.SetValue(value)
+    return was
+EndFunction
+
+Function PutOStimSettingBack(int formId, float was) global
+    GlobalVariable setting = Game.GetFormFromFile(formId, "OStim.esp") as GlobalVariable
+    if setting && was >= 0.0
+        setting.SetValue(was)
+    endIf
+EndFunction
+
+Function NoteGroupFailed(string how, bool advanced, string reason) global
+    Note("FAIL groupsexwithplayer-" + how + " " + reason)
+    Note("FAIL sexwithnpc-" + how + " " + reason)
+    if !advanced
+        Note("FAIL groupsexwithplayer-typed " + reason)
+        Note("FAIL sexwithnpc-typed " + reason)
+    endIf
+EndFunction
+
+; Whether a scene ends after the endedBefore ones within the seconds
+bool Function SceneEnds(MantellaListenerScript listener, int endedBefore, float seconds) global
+    float waited = 0.0
+    while listener.OStimScenesEnded <= endedBefore && waited < seconds
+        Utility.Wait(0.5)
+        waited += 0.5
+    endWhile
+    return listener.OStimScenesEnded > endedBefore
+EndFunction
+
+; Whether something is worn on the body slot (32): clothes or armor
+bool Function WearsClothes(Actor npc) global
+    return npc.GetWornForm(0x00000004) != None
+EndFunction
+
+bool Function ClothesBecome(Actor npc, bool worn) global
+    float waited = 0.0
+    while WearsClothes(npc) != worn && waited < TIMEOUT()
+        Utility.Wait(0.5)
+        waited += 0.5
+    endWhile
+    return WearsClothes(npc) == worn
+EndFunction
+
+; Whether OStim starts a scene after the startedBefore ones
+bool Function SceneStarts(MantellaListenerScript listener, int startedBefore) global
+    float waited = 0.0
+    while listener.OStimScenesStarted <= startedBefore && waited < TIMEOUT()
+        Utility.Wait(0.5)
+        waited += 0.5
+    endWhile
+    return listener.OStimScenesStarted > startedBefore
+EndFunction
+
+; Presses OStim's End key (its setting OStimKeyEnd) until a scene ends after the endedBefore ones. Nothing to end if none started
+Function EndPlayerScene(MantellaListenerScript listener, int endedBefore) global
+    if listener.OStimScenesStarted <= listener.OStimScenesEnded
+        return
+    endIf
+    GlobalVariable endKey = Game.GetFormFromFile(0x000E2D, "OStim.esp") as GlobalVariable ; OStimKeyEnd
+    float waited = 0.0
+    while listener.OStimScenesEnded <= endedBefore && waited < TIMEOUT()
+        if endKey && endKey.GetValueInt() > 0
+            Input.TapKey(endKey.GetValueInt())
+        endIf
+        Utility.Wait(2.0)
+        waited += 2.0
+    endWhile
+    if listener.OStimScenesEnded <= endedBefore
+        Note("the scene with you didn't end: end it yourself")
+    endIf
+EndFunction
+
+; Someone else nearby for the group conversation: not a guard, a child or a follower
+Actor Function FindSecondNpc(MantellaRepository repository, MantellaConversation conversation, Actor npc) global
+    Actor[] people = MantellaShout.FindNearbyWith(repository, conversation, 20.0, false, false, 10)
+    int i = 0
+    while i < people.Length
+        Actor person = people[i]
+        if person && person != npc && !person.IsGuard() && !person.IsChild() && !IsFollowing(repository, person)
+            return person
+        endIf
+        i += 1
+    endWhile
+    return None
+EndFunction
+
+bool Function StartGroup(MantellaConversation conversation, Actor npc, Actor other) global
+    Actor[] actors = new Actor[3]
+    actors[0] = Game.GetPlayer()
+    actors[1] = npc
+    actors[2] = other
+    if !MantellaEventTest.StartConversation(conversation, actors, true)
+        return false
+    endIf
+    MantellaTalkTest.WaitForTurn(conversation)
+    return conversation.IsRunning()
+EndFunction
+
 ; A name or spell as a detail in a cue: one word, with _ for a space
 string Function AsDetail(string text) global
     string result = ""

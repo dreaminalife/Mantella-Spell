@@ -210,7 +210,7 @@ event OnUpdate()
         repository.talkTestRun = 0
         SendModEvent("Mantella_TalkTest")
     endIf
-    if repository.actionTestRun != 0 ; Set from the console by the in-game test of the NPC actions: 1, or 2 with Advanced Actions on
+    if repository.actionTestRun != 0 ; Set from the console by the in-game test of the NPC actions: 1, or 2 with Advanced Actions on, 3 or 4 for other mods' actions
         float testRun = repository.actionTestRun as float
         repository.actionTestRun = 0
         SendModEvent("Mantella_ActionTest", "", testRun)
@@ -760,9 +760,33 @@ EndEvent
 Event OnActionTest(string eventName, string strArg, float numArg, Form sender)
     if numArg == 2.0
         MantellaActionTest.RunAdvanced(repository, conversation, self)
+    elseIf numArg == 3.0 || numArg == 4.0 ; Other mods' actions, 4 with Advanced Actions on
+        MantellaActionTest.RunOtherMods(repository, conversation, self, numArg == 4.0)
     else
         MantellaActionTest.Run(repository, conversation, self)
     endIf
+EndEvent
+
+; The in-game test of other mods' actions counts OStim's scenes while it runs (MantellaActionTest.RunOtherMods)
+int property OStimScenesStarted auto hidden
+int property OStimScenesEnded auto hidden
+
+Function WatchOStimScenes(bool watch)
+    if watch
+        RegisterForModEvent("ostim_thread_start", "OnOStimSceneStart")
+        RegisterForModEvent("ostim_thread_end", "OnOStimSceneEnd")
+    else
+        UnregisterForModEvent("ostim_thread_start")
+        UnregisterForModEvent("ostim_thread_end")
+    endIf
+EndFunction
+
+Event OnOStimSceneStart(string eventName, string strArg, float numArg, Form sender)
+    OStimScenesStarted += 1
+EndEvent
+
+Event OnOStimSceneEnd(string eventName, string strArg, float numArg, Form sender)
+    OStimScenesEnded += 1
 EndEvent
 
 Event OnHeardLinesTest(string eventName, string strArg, float numArg, Form sender)

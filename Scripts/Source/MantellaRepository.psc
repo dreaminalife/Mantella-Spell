@@ -166,7 +166,7 @@ bool property NPCdebugSelectModeEnabled auto
 int property HttpPort auto
 int property eventTestRun auto ; Set to 1 from the console (setpqv MantellaQuest eventTestRun 1) to run the in-game test of the events. See MantellaEventTest
 int property talkTestRun auto ; Set to 1 from the console (setpqv MantellaQuest talkTestRun 1) to run the in-game test of the talk settings. See MantellaTalkTest
-int property actionTestRun auto ; Set to 1 from the console (setpqv MantellaQuest actionTestRun 1) to run the in-game test of the NPC actions, 2 to run it with Advanced Actions on. See MantellaActionTest
+int property actionTestRun auto ; Set to 1 from the console (setpqv MantellaQuest actionTestRun 1) to run the in-game test of the NPC actions, 2 to run it with Advanced Actions on, 3 and 4 for other mods' actions (4 with Advanced Actions on). See MantellaActionTest
 int property heardLinesTestRun auto ; Set to 1 from the console (setpqv MantellaQuest heardLinesTestRun 1) to run the in-game test of Vanilla Dialogues. See MantellaHeardLinesTest
 int property heardLinesTestOnLoad auto ; The run of that test to go on with when this save is loaded. Set in the saves the test makes
 

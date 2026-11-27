@@ -72,7 +72,7 @@ int _roomScanId = 0 ; Counts the room scans asked for. Cancelling the text box, 
 int _roomScanStartedId = 0 ; The last room scan that began running
 int _roomScanDoneId = 0 ; The last room scan that finished
 Actor[] _roomScanNearby ; What the last finished room scan found
-int _roomMicScanId = 0 ; Saying something to the room with the microphone: the scan finding who is nearby while the player speaks. 0 for none
+int _shoutScanId = 0 ; The room scan finding who is nearby for Shout, while it runs: since Shout was switched on, or while the player says something to the room with the microphone. Requests don't wait for it, except the player's line (WaitForShoutScan). 0 for none
 Form[] _prebuiltActors ; People nearby whose full actor settings the room scan built while the player typed, or the NPC Event check built
 int[] _prebuiltHandles ; Their actor settings, used by the start instead of building them again
 Actor[] _npcEventNearby ; Who the NPC Event check found nearby, so the start doesn't scan again
@@ -344,7 +344,7 @@ function StartConversation(Actor[] actorsToStartConversationWith)
         _isRoomConversation = true
         ClearPrebuiltActors() ; Built while the player typed. Later requests build them fresh
         if !roomNearby || roomNearby.Length == 0
-            _roomMicScanId = StartRoomScan() ; Microphone: nobody was looked for yet. Found while the player speaks (UseRoomMicScan)
+            _shoutScanId = StartRoomScan() ; Microphone: nobody was looked for yet. Found while the player speaks (WaitForShoutScan)
         endIf
     elseIf IsNpcEvent()
         ; An NPC Event runs in Shout from the start, so its Game Master can draw in anyone nearby. While the player watches,
@@ -937,7 +937,10 @@ Function SetShout(bool isOn)
         _isShouting = true
         _shoutSentActors = Utility.CreateFormArray(0)
         _shoutSentHandles = Utility.CreateIntArray(0)
-        RefreshShoutNearby()
+        ; Finding who is nearby and building the nearest takes many seconds in a crowded place. It runs on another thread, so the NPCs
+        ; go on and the player gets the turn without waiting. The first request after it is done sends it, or the player's line waits for it
+        ClearPrebuiltActors()
+        _shoutScanId = StartRoomScan()
         Debug.Notification("Shouting: anyone nearby can answer or join in")
         return
     endIf
@@ -1098,6 +1101,10 @@ string Function AddToNames(string names, string name, bool isLast)
 EndFunction
 
 Function ClearShout()
+    if _shoutScanId != 0
+        CancelRoomScan(_shoutScanId) ; Private before it was done: what it finds is unused
+        _shoutScanId = 0
+    endIf
     _isShouting = false
     _shoutNearby = _noActors
     _shoutNearbyRefids = _noInts
@@ -1110,9 +1117,9 @@ Function ClearShout()
     _isShoutNearbyByShoutRules = false
 EndFunction
 
-; Finds who is nearby now. Called when Shout is switched on and on every tick of MantellaListenerScript, so requests only attach the last list
+; Finds who is nearby now. Called on every tick of MantellaListenerScript, so requests only attach the last list
 Function RefreshShoutNearby()
-    if !_isShouting || _roomMicScanId != 0 ; The room scan is already looking
+    if !_isShouting || _shoutScanId != 0 ; The room scan is already looking
         return
     endIf
     bool byShoutRules = !MantellaShout.IsWatchingNpcEvent(self) ; As FindNearby decides it
@@ -1163,6 +1170,11 @@ Function AddShoutValues(int handle)
     if !_isShouting
         return
     endIf
+    bool tookScan = TakeShoutScan()
+    if _shoutScanId != 0
+        AddShoutSettings(handle) ; Still looking: who is nearby goes with a later request. MantellaSoftware keeps the list it has
+        return
+    endIf
     if !_shoutNearbyRefids
         RefreshShoutNearby()
     endIf
@@ -1172,7 +1184,10 @@ Function AddShoutValues(int handle)
     Actor[] nearby = _shoutNearby
     SKSE_HTTP.setIntArray(handle, mConsts.KEY_SHOUT_NEARBY_REFIDS, refids)
     SKSE_HTTP.setStringArray(handle, mConsts.KEY_SHOUT_NEARBY_NAMES, names)
-    AddNewShoutActors(handle, nearby)
+    AddNewShoutActors(handle, nearby) ; Uses the actor settings the scan built
+    if tookScan
+        ClearPrebuiltActors() ; Kept with the people sent (AddShoutSent). Later requests build people fresh
+    endIf
     AddShoutSettings(handle)
     if _shoutAddFailedRefids && _shoutAddFailedRefids.Length > 0
         SKSE_HTTP.setIntArray(handle, mConsts.KEY_SHOUT_ADDFAILED_REFIDS, _shoutAddFailedRefids)
@@ -2033,10 +2048,6 @@ Function CleanupConversation()
     _earlyLine = ""
     _isEarlyListening = false
     _startActors = _noActors
-    if _roomMicScanId != 0
-        CancelRoomScan(_roomMicScanId) ; Ended before the player spoke
-        _roomMicScanId = 0
-    endIf
     _isRoomConversation = false
     _isGameMasterMode = false
     _holdForEventText = false ; ShowEventText clears it too. Also here, so a hold left behind can't stop the next conversation from starting
@@ -2047,8 +2058,8 @@ Function CleanupConversation()
     _eventScanId += 1 ; A search from the wheel is about this conversation's people
     _eventScanNearby = _noActors
     _lastEventSentActors = _noForms
+    ClearShout() ; Also stops a scan still looking for who is nearby, before what it built is cleared
     ClearPrebuiltActors()
-    ClearShout()
     if _isWalkingOver ; Those still walking over stop where they are
         MantellaAdvancedAction_MoveTo walker = GetWalker()
         if walker
@@ -2100,29 +2111,37 @@ function sendRequestForPlayerInput(string playerInput, bool updateContext)
             BuildContext()
         endIf
         SKSE_HTTP.setNestedDictionary(handle, mConsts.KEY_CONTEXT, _contextHandle)
-        bool usedRoomScan = UseRoomMicScan()
+        WaitForShoutScan()
         AddShoutValues(handle)
-        if usedRoomScan
-            ClearPrebuiltActors() ; Built while the player spoke. Later requests build them fresh
-        endIf
 
         AddHeardLines(handle)
         SKSE_HTTP.sendLocalhostHttpRequest(handle, repository.HttpPort, mConsts.HTTP_ROUTE_MAIN)
     EndIf
 endFunction
 
-; Saying something to the room with the microphone: who is nearby, found while the player spoke, goes with their line, so the
-; Game Master can pick someone to answer. Waits if the scan is not done yet. Returns true if it was used
-bool Function UseRoomMicScan()
-    int scanId = _roomMicScanId
+; Who is nearby goes with the player's line, so the Game Master can pick someone to answer: found while the player typed or spoke, since
+; Shout was switched on or the player said something to the room with the microphone. Waits if the scan is not done yet. AddShoutValues takes it
+Function WaitForShoutScan()
+    int scanId = _shoutScanId
     if scanId == 0
-        return false
+        return
     endIf
-    _roomMicScanId = 0
     if !FinishRoomScan(scanId)
+        if _shoutScanId == scanId ; Not a new scan, from Private and Shout again while this waited
+            _shoutScanId = 0
+        endIf
         RefreshShoutNearby() ; Replaced by another scan: looked for here instead
+    endIf
+endFunction
+
+; The scan is done: who it found becomes Shout's list, and the actor settings it built are used as the nearest are sent (BuiltHandle).
+; Doesn't wait. Returns true if it was taken
+bool Function TakeShoutScan()
+    int scanId = _shoutScanId
+    if scanId == 0 || _roomScanDoneId != scanId || _roomScanId != scanId
         return false
     endIf
+    _shoutScanId = 0
     SetShoutNearby(GetRoomScanResult())
     _isShoutNearbyByShoutRules = true ; Found with the Shout Mode page's rules, as RefreshShoutNearby does
     return true
@@ -2801,6 +2820,15 @@ int function buildActorSetting(Actor actorToBuild)
     SKSE_HTTP.setBool(handle, mConsts.KEY_ACTOR_ISGHOST, actorToBuild.IsGhost())
     if !isPlayerCharacter
         SKSE_HTTP.setBool(handle, mConsts.KEY_ACTOR_ISUNIQUE, actorToBuild.GetActorBase().IsUnique())
+        ; A name a mod or quest gave this one person ("Njordunn the Fox, Whiterun Guard"). It has to differ from both the name the game
+        ; built for them (template included) and their base's name, so a plain Necromancer from a list never counts
+        string shownName = actorToBuild.GetDisplayName()
+        ActorBase builtFrom = actorToBuild.GetLeveledActorBase()
+        bool hasOwnName = shownName != "" && builtFrom && shownName != builtFrom.GetName() && shownName != actorToBuild.GetActorBase().GetName()
+        SKSE_HTTP.setBool(handle, mConsts.KEY_ACTOR_HASOWNNAME, hasOwnName)
+        if hasOwnName ; the people built like them (Whiterun Guard), whose bio they get when they have none of their own
+            SKSE_HTTP.setString(handle, mConsts.KEY_ACTOR_CROWDNAME, builtFrom.GetName())
+        endIf
     endIf
     if !isPlayerCharacter && repository.IsVoiceClipsInstalled()
         ActorBase npc = actorToBuild.GetActorBase()

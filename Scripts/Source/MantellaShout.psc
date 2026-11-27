@@ -97,7 +97,7 @@ EndFunction
 ; Cancelling the box throws the scan away. Pressing again while one is getting ready does nothing: otherwise a second text box would open
 ; after Enter, and its scan would replace the first one, so the first line was lost.
 ; With the microphone the conversation starts without scanning, so it listens sooner. The scan runs while the player speaks and goes with
-; their line (MantellaConversation.UseRoomMicScan). With nobody around, the player hears "Nobody answers" after speaking
+; their line (MantellaConversation.WaitForShoutScan). With nobody around, the player hears "Nobody answers" after speaking
 Function SayToRoom(MantellaRepository repository, MantellaConversation conversation) global
     if conversation.IsRunning() || !conversation.BeginSayToRoom()
         return

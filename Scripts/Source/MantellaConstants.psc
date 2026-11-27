@@ -129,6 +129,7 @@ string property KEY_ACTOR_VOICETYPE = "mantella_actor_voicetype" auto
 string property KEY_ACTOR_PLUGIN = "mantella_actor_plugin" auto ; The plugin the NPC comes from and their form ID in it, for a voice clip of their own
 string property KEY_ACTOR_LOCALID = "mantella_actor_localid" auto
 string property KEY_ACTOR_ISGHOST = "mantella_actor_is_ghost" auto ; For the voice effect: ghosts share their race with the living
+string property KEY_ACTOR_ISUNIQUE = "mantella_actor_is_unique" auto ; One of a kind, not one of many with the same name (Bandit): gets a bio saved when they have none
 string property KEY_ACTOR_ISINCOMBAT = "mantella_actor_is_in_combat" auto
 string property KEY_ACTOR_ISENEMY = "mantella_actor_is_enemy" auto
 string property KEY_ACTOR_CUSTOMVALUES = "mantella_actor_custom_values" auto

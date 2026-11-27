@@ -40,8 +40,27 @@ Function Run(MantellaRepository repository, MantellaConversation conversation, M
     ; The actions that make an NPC walk somewhere (MoveTo, Flee, Loot) put them in this faction while they do, at a rank for each
     Faction actionFaction = Game.GetFormFromFile(0x223451, "Mantella.esp") as Faction ; MantellaFunctionSourceFaction
     ObjectReference start = player.PlaceAtMe(Game.GetFormFromFile(0x00003B, "Skyrim.esm")) ; An XMarker where you start, to come back to
+    bool walkOverOffWas = repository.NPCWalkOverOff
+    bool stopToTalkWas = repository.NPCPackage
+    repository.NPCWalkOverOff = false ; NPCs Walk Over to Talk, on by default
+    repository.NPCPackage = true ; NPCs Stop to Talk, which it needs. On by default
 
-    if Start(conversation, npc)
+    ; 0. NPCs Walk Over to Talk: you start the conversation from across the room, and the NPC walks over to you. Once they've answered
+    ; next to you, they stop following you and stand still to talk
+    Actor across = MoveAcrossFrom(repository, conversation, npc)
+    bool started = Start(conversation, npc)
+    if started && across
+        Check(WalksOver(npc, player, actionFaction), "walkover-on", "NPCs Walk Over to Talk: the NPC walks over to you as the conversation starts")
+        Say(conversation, "Good to see you.")
+        MantellaTalkTest.WaitForTurn(conversation)
+        Check(npc.GetFactionRank(actionFaction) != MOVING(), "walkover-released", "NPCs Walk Over to Talk: once they've answered you, the NPC stands still to talk")
+    elseIf started
+        Note("FAIL walkover-on nobody " + Meters(FAR()) + " or more from " + npc.GetDisplayName() + " to go and stand by, so the test couldn't check NPCs Walk Over to Talk")
+        Note("FAIL walkover-released nobody to go and stand by")
+    endIf
+    StopAction(npc, actionFaction)
+
+    if started
         ; 1. With the menu's NPC Actions switches off (the default), the actions do nothing
         SetSwitches(repository, false, false, false)
         SayCue(conversation, "follow", "Come with me.")
@@ -96,7 +115,7 @@ Function Run(MantellaRepository repository, MantellaConversation conversation, M
         StopAction(npc, actionFaction)
 
         ; Teleport and MoveTo: you go and stand by someone across the room from the NPC, who then comes to you
-        Actor across = MoveAcrossFrom(repository, conversation, npc)
+        across = MoveAcrossFrom(repository, conversation, npc)
         if across
             float[] stood = HoldStill(conversation, npc)
             SayCue(conversation, "teleport", "Get over here, now.")
@@ -152,6 +171,24 @@ Function Run(MantellaRepository repository, MantellaConversation conversation, M
     ; Put back what the test changed
     StopAction(npc, actionFaction)
     StopFighting(npc)
+
+    ; With NPCs Walk Over to Talk off, the NPC you start a conversation with from across the room stays where they are
+    repository.NPCWalkOverOff = true
+    across = None
+    if !npc.IsDead() && !conversation.IsRunning()
+        across = MoveAcrossFrom(repository, conversation, npc)
+    endIf
+    if across && Start(conversation, npc)
+        Utility.Wait(SETTLE())
+        Check(npc.GetFactionRank(actionFaction) != MOVING(), "walkover-off", "with NPCs Walk Over to Talk off, the NPC doesn't walk over to you")
+        MantellaEventTest.EndConversation(conversation)
+    else
+        Note("FAIL walkover-off nobody to go and stand by, or the conversation didn't start, so the test couldn't check it")
+    endIf
+    repository.NPCWalkOverOff = walkOverOffWas
+    repository.NPCPackage = stopToTalkWas
+    StopAction(npc, actionFaction)
+
     player.MoveTo(start)
     start.Delete()
     if IsFollowing(repository, npc)

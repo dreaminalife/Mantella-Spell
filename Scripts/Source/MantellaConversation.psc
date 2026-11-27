@@ -109,6 +109,7 @@ bool _isEarlyTurn = false ; The early turn is on. Ends with the first reply afte
 string _earlyLine = "" ; Typed during the early turn
 bool _isEarlyListening = false ; The microphone started listening during the early turn
 Actor[] _startActors ; Who the conversation starts with, so the microphone hears their names from the first line
+bool _isWalkingOver = false ; NPCs Walk Over to Talk sent someone over to the player who hasn't arrived yet
 
 ; Never assigned, so always None: arrays are cleared with these. Assigning None to an array fails in the game ("Cannot cast from None to
 ; Actor[]"), and a local array declared "= None" then can't take an array at all, so it stays None
@@ -671,6 +672,7 @@ function ProcessNpcSpeak(int handle)
     ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " to get actor based on speaker name", 2)
     ;Debug.Notification("Chosen Actor: "+ speaker.GetDisplayName())
 
+    StopArrivedWalkOvers()
     if speaker != none
         WaitForNpcToFinishSpeaking(speaker, _lastNpcToSpeak)
         ; Debug.Trace((Utility.GetCurrentRealTime() - httpReceivedTime) + " seconds to wait for last NPC to finish speaking", 2)
@@ -2047,6 +2049,13 @@ Function CleanupConversation()
     _lastEventSentActors = _noForms
     ClearPrebuiltActors()
     ClearShout()
+    if _isWalkingOver ; Those still walking over stop where they are
+        MantellaAdvancedAction_MoveTo walker = GetWalker()
+        if walker
+            walker.StopWalkOvers()
+        endIf
+        _isWalkingOver = false
+    endIf
     ;SKSE_HTTP.clearAllDictionaries()
     If (MantellaConversationParticipantsQuest.IsRunning())
         MantellaConversationParticipantsQuest.Stop()
@@ -2558,9 +2567,55 @@ Function AddActors(Actor[] actorsToAdd)
         CauseReassignmentOfParticipantAlias()
         BuildNpcsInConversationArray()
         SendActorAddedEvents(actorsAdded)
+        WalkOverToPlayer(actorsAdded)
     EndIf
     
     ;PrintActorsInConversation()
+EndFunction
+
+; NPCs Walk Over to Talk: NPCs who join a conversation with the player from farther than about 4.5 m walk over to them first, also
+; out of a chair or a bed. Then they stand still to talk, as NPCs Stop to Talk has them do, which it needs. Nobody NPCs Stop to Talk
+; doesn't hold still walks over (its package's conditions): followers follow the player already. Nor anyone in combat, on a horse or
+; in a scene, such as a bard's song
+Function WalkOverToPlayer(Form[] actorsAdded)
+    if repository.NPCWalkOverOff || !repository.NPCPackage || !Participants.HasForm(PlayerRef)
+        return
+    endIf
+    Faction followerFaction = Game.GetFormFromFile(0x05C84E, "Skyrim.esm") as Faction ; CurrentFollowerFaction
+    Keyword superFollower = Game.GetFormFromFile(0x153B3B, "Mantella.esp") as Keyword ; MantellaSuperFollower
+    MantellaAdvancedAction_MoveTo walker
+    int i = 0
+    While i < actorsAdded.Length
+        Actor npc = actorsAdded[i] as Actor
+        if npc && npc != PlayerRef && npc.Is3DLoaded() && npc.GetDistance(PlayerRef) > MantellaAdvancedAction_MoveTo.WALK_OVER_DISTANCE()
+            bool isFollower = npc.IsInFaction(followerFaction) || npc.IsInFaction(repository.giafac_Following) || npc.IsInFaction(repository.giafac_AllowFollower) || npc.HasKeyword(superFollower)
+            if !isFollower && !npc.IsInCombat() && !npc.IsOnMount() && !npc.GetCurrentScene()
+                if !walker
+                    walker = GetWalker()
+                endIf
+                if walker && walker.WalkOver(npc)
+                    _isWalkingOver = true
+                endIf
+            endIf
+        endIf
+        i += 1
+    EndWhile
+EndFunction
+
+; Those walking over who have reached the player stand still to talk. Run with each NPC line, so no timer is needed
+Function StopArrivedWalkOvers()
+    if _isWalkingOver
+        MantellaAdvancedAction_MoveTo walker = GetWalker()
+        if walker
+            _isWalkingOver = walker.StopArrivedWalkOvers()
+        else
+            _isWalkingOver = false
+        endIf
+    endIf
+EndFunction
+
+MantellaAdvancedAction_MoveTo Function GetWalker()
+    return Game.GetFormFromFile(0x22344E, "Mantella.esp") as MantellaAdvancedAction_MoveTo ; The MoveTo action's quest, which walks NPCs over
 EndFunction
 
 Function RemoveActors(Actor[] actorsToRemove)
@@ -2574,6 +2629,12 @@ Function RemoveActors(Actor[] actorsToRemove)
             actorsRemoved[actorsRemoved.Length - 1] = actorInQuestion
             Participants.RemoveAddedForm(actorInQuestion)
             actorInQuestion.RemoveFromFaction(MantellaConversationParticipantsFaction)
+            if _isWalkingOver ; Stops where they are if they were walking over
+                MantellaAdvancedAction_MoveTo walker = GetWalker()
+                if walker
+                    walker.StopWalkOver(actorInQuestion)
+                endIf
+            endIf
             Debug.Notification(actorInQuestion.GetDisplayName()+" left the conversation.")
             int joinerIndex = -1
             if _shoutJoiners
@@ -2738,6 +2799,9 @@ int function buildActorSetting(Actor actorToBuild)
     SKSE_HTTP.setInt(handle, mConsts.KEY_ACTOR_RELATIONSHIPRANK, actorToBuild.getrelationshiprank(PlayerRef))
     SKSE_HTTP.setString(handle, mConsts.KEY_ACTOR_VOICETYPE, actorToBuild.GetVoiceType())
     SKSE_HTTP.setBool(handle, mConsts.KEY_ACTOR_ISGHOST, actorToBuild.IsGhost())
+    if !isPlayerCharacter
+        SKSE_HTTP.setBool(handle, mConsts.KEY_ACTOR_ISUNIQUE, actorToBuild.GetActorBase().IsUnique())
+    endIf
     if !isPlayerCharacter && repository.IsVoiceClipsInstalled()
         ActorBase npc = actorToBuild.GetActorBase()
         SKSE_HTTP.setString(handle, mConsts.KEY_ACTOR_PLUGIN, MantellaVoiceClips.GetSourcePlugin(npc))

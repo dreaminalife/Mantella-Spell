@@ -158,6 +158,7 @@ bool property AllowForNPCtoFollow auto ;gia
 bool property NPCAnger auto ;gia
 bool property NPCInventory auto
 bool property NPCPackage auto Conditional
+bool property NPCWalkOverOff auto ; NPCs Walk Over to Talk, stored the other way round: on by default, also in saves from before it
 ;bool property NPCForgive auto ;gia
 bool property NPCDialogue auto ;gia
 
@@ -194,6 +195,7 @@ endEvent
 ; and add the corresponding default value here in a block corresponding to the version number like the examples below
 ; Doing it like this will only assign the defaul values to settings that haven't been initialised prior.
 function assignDefaultSettings(int lastVersion, bool isFirstInit = false)
+    ; Version 24 added NPCs Walk Over to Talk (NPCWalkOverOff). Stored the other way round, so it needs no default here
     If (lastVersion < 23 || isFirstInit)
         vanillaDialogueNearbyOverhear = true
         vanillaDialogueHearingDistance = 20

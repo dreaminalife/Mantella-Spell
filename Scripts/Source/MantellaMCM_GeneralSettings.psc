@@ -37,6 +37,7 @@ function RightColumn(MantellaMCM mcm, MantellaRepository Repository) global
 	mcm.oid_NPCAngerToggle = mcm.AddToggleOption("Allow Aggro", Repository.NPCAnger)
     mcm.oid_NPCInventoryToggle = mcm.AddToggleOption("Allow Inventory", Repository.NPCInventory)
     mcm.oid_NPCPackageToggle = mcm.AddToggleOption("NPCs Stop to Talk", Repository.NPCPackage)
+    mcm.oid_NPCWalkOverToggle = mcm.AddToggleOption("NPCs Walk Over to Talk", !Repository.NPCWalkOverOff, WalkOverFlags(mcm, Repository))
     mcm.oid_showDialogueItems = mcm.AddToggleOption("Show Dialogue Items", repository.showDialogueItems)
 endfunction
 
@@ -170,5 +171,17 @@ function OptionUpdate(MantellaMCM mcm, int optionID, MantellaRepository Reposito
     elseIf optionID == mcm.oid_NPCPackageToggle
         Repository.NPCPackage =! Repository.NPCPackage
         mcm.SetToggleOptionValue(mcm.oid_NPCPackageToggle, Repository.NPCPackage)
+        mcm.SetOptionFlags(mcm.oid_NPCWalkOverToggle, WalkOverFlags(mcm, Repository))
+    elseIf optionID == mcm.oid_NPCWalkOverToggle
+        Repository.NPCWalkOverOff =! Repository.NPCWalkOverOff
+        mcm.SetToggleOptionValue(mcm.oid_NPCWalkOverToggle, !Repository.NPCWalkOverOff)
     endif
+endfunction
+
+; NPCs Walk Over to Talk can't be changed while NPCs Stop to Talk is off: without it, NPCs who walked over would just walk off again
+int function WalkOverFlags(MantellaMCM mcm, MantellaRepository Repository) global
+    if Repository.NPCPackage
+        return mcm.OPTION_FLAG_NONE
+    endIf
+    return mcm.OPTION_FLAG_DISABLED
 endfunction
